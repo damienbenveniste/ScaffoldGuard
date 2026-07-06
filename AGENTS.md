@@ -222,6 +222,24 @@ explain why it is blocked.
 - When a task explicitly includes pushing or publishing, watch the relevant
   GitHub Actions runs after pushing and report the final status.
 
+## Release Workflow
+
+- Use short-lived release branches such as `release/v0.1.1`; do not create
+  long-lived version branches.
+- For a release, update `pyproject.toml`, `src/scaffold_guard/__init__.py`,
+  `uv.lock`, `CHANGELOG.md`, and any version-specific release docs in the same
+  pull request.
+- Run the full pre-release gate and inspect the built wheel before opening or
+  merging the release pull request.
+- After the release pull request is squash-merged to `main`, create a GitHub
+  Release tag such as `v0.1.1` from `main`; that release triggers the PyPI
+  publish workflow.
+- Codex may prepare the release branch, open the pull request, watch CI, merge
+  when repository rules allow it, create the GitHub Release, and watch the
+  publish workflow. The `pypi` environment approval is the human release gate:
+  provide the maintainer the exact GitHub Actions link and wait for approval
+  before verifying PyPI.
+
 ## Final Response Requirements
 
 - Summarize the user-visible change and name the main files touched.
