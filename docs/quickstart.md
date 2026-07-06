@@ -5,20 +5,20 @@
 After PyPI publication, run the CLI with `uvx`:
 
 ```bash
-uvx repo-guard version
+uvx --from repo-guard-cli repo-guard version
 ```
 
 For local release testing, build the wheel and run it directly:
 
 ```bash
 uv build
-uvx --from dist/repo_guard-0.1.0-py3-none-any.whl repo-guard version
+uvx --from dist/repo_guard_cli-0.1.0-py3-none-any.whl repo-guard version
 ```
 
 ## Create A Project
 
 ```bash
-uvx repo-guard init my_project --agent all
+uvx --from repo-guard-cli repo-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
 uv run repo-guard check
@@ -28,9 +28,9 @@ uv run repo-guard validate --quick
 Use one adapter when you only need one agent surface:
 
 ```bash
-uvx repo-guard init codex_demo --agent codex
-uvx repo-guard init claude_demo --agent claude
-uvx repo-guard init cursor_demo --agent cursor
+uvx --from repo-guard-cli repo-guard init codex_demo --agent codex
+uvx --from repo-guard-cli repo-guard init claude_demo --agent claude
+uvx --from repo-guard-cli repo-guard init cursor_demo --agent cursor
 ```
 
 ## Preview Or Refresh Files

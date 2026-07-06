@@ -5,14 +5,14 @@ coding agents. It creates a typed package layout, local validation commands,
 GitHub Actions workflows, and agent instructions for Codex, Claude Code, and
 Cursor.
 
-The PyPI package and installed command are both `repo-guard`.
+The PyPI package is `repo-guard-cli`; the installed command is `repo-guard`.
 
 ## Install
 
 After the package is published to PyPI:
 
 ```bash
-uvx repo-guard version
+uvx --from repo-guard-cli repo-guard version
 ```
 
 From a local checkout or built wheel:
@@ -21,7 +21,7 @@ From a local checkout or built wheel:
 uv sync --all-groups
 uv run repo-guard version
 uv build
-uvx --from dist/repo_guard-0.1.0-py3-none-any.whl repo-guard version
+uvx --from dist/repo_guard_cli-0.1.0-py3-none-any.whl repo-guard version
 ```
 
 ## Publishing
@@ -30,7 +30,7 @@ PyPI publishing is prepared through GitHub Actions Trusted Publishing. Before
 the first release, configure a PyPI pending publisher for:
 
 ```text
-Project name: repo-guard
+Project name: repo-guard-cli
 Owner: damienbenveniste
 Repository: RepoGuard
 Workflow: publish.yml
@@ -45,7 +45,7 @@ GitHub Release or manually run the `Publish` workflow from `main`.
 Generate a project with every supported adapter:
 
 ```bash
-uvx repo-guard init my_project --agent all
+uvx --from repo-guard-cli repo-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
 uv run repo-guard check
@@ -55,9 +55,9 @@ uv run repo-guard validate --quick
 Generate for one agent surface:
 
 ```bash
-uvx repo-guard init codex_demo --agent codex
-uvx repo-guard init claude_demo --agent claude
-uvx repo-guard init cursor_demo --agent cursor
+uvx --from repo-guard-cli repo-guard init codex_demo --agent codex
+uvx --from repo-guard-cli repo-guard init claude_demo --agent claude
+uvx --from repo-guard-cli repo-guard init cursor_demo --agent cursor
 ```
 
 Use `--dry-run` to preview files and `--force` to overwrite known generated

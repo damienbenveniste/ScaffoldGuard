@@ -20,8 +20,8 @@ uv build
 ## Inspect The Wheel
 
 ```bash
-python -m zipfile -l dist/repo_guard-0.1.0-py3-none-any.whl | grep templates
-uvx --from dist/repo_guard-0.1.0-py3-none-any.whl repo-guard version
+python -m zipfile -l dist/repo_guard_cli-0.1.0-py3-none-any.whl | grep templates
+uvx --from dist/repo_guard_cli-0.1.0-py3-none-any.whl repo-guard version
 ```
 
 The wheel must include the packaged templates under `repo_guard/templates/`.
@@ -31,7 +31,7 @@ The wheel must include the packaged templates under `repo_guard/templates/`.
 Before the first upload, create a PyPI pending publisher with these values:
 
 ```text
-Project name: repo-guard
+Project name: repo-guard-cli
 Owner: damienbenveniste
 Repository: RepoGuard
 Workflow: publish.yml

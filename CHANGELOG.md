@@ -12,3 +12,5 @@
 - Added Python 3.14 CI coverage and PyPI Trusted Publishing release automation.
 - Updated repository and generated-project GitHub Actions to current action
   releases.
+- Renamed the PyPI distribution to `repo-guard-cli` while keeping the installed
+  command as `repo-guard`.

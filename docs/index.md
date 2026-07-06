@@ -17,7 +17,7 @@ GitHub Actions CI, local policy checks, and agent instruction files.
 ## Basic Flow
 
 ```bash
-uvx repo-guard init my_project --agent all
+uvx --from repo-guard-cli repo-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
 uv run repo-guard check
