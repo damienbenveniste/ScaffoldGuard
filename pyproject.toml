@@ -5,8 +5,23 @@ description = "Generate guarded Python project starters for Codex, Claude Code, 
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+keywords = ["agents", "codex", "cursor", "claude", "scaffold", "repo-guard"]
 authors = [
     { name = "Damien Benveniste" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Code Generators",
+    "Typing :: Typed",
 ]
 dependencies = [
     "jinja2>=3.1.0",
@@ -14,6 +29,12 @@ dependencies = [
     "rich>=13.7.0",
     "typer>=0.12.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/damienbenveniste/RepoGuard"
+Repository = "https://github.com/damienbenveniste/RepoGuard"
+Issues = "https://github.com/damienbenveniste/RepoGuard/issues"
+Documentation = "https://github.com/damienbenveniste/RepoGuard#readme"
 
 [project.scripts]
 repo-guard = "repo_guard.cli:app"

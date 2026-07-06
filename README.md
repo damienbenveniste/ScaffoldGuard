@@ -24,6 +24,22 @@ uv build
 uvx --from dist/repo_guard-0.1.0-py3-none-any.whl repo-guard version
 ```
 
+## Publishing
+
+PyPI publishing is prepared through GitHub Actions Trusted Publishing. Before
+the first release, configure a PyPI pending publisher for:
+
+```text
+Project name: repo-guard
+Owner: damienbenveniste
+Repository: RepoGuard
+Workflow: publish.yml
+Environment: pypi
+```
+
+No PyPI API token is required. After the pending publisher exists, publish a
+GitHub Release or manually run the `Publish` workflow from `main`.
+
 ## Quickstart
 
 Generate a project with every supported adapter:

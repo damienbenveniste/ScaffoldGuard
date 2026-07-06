@@ -64,6 +64,9 @@ configuration change in this repository.
 - Use `uv` for dependency management, lockfile updates, virtual environment work,
   and command execution.
 - The CLI package should support Python `>=3.11`.
+- Test the CLI package on every supported Python feature release in CI. Do not
+  leave a current supported Python release out of the matrix without an explicit
+  compatibility reason.
 - Generated projects should target Python `>=3.13` unless the implementation
   plan changes.
 - Keep CLI runtime dependencies minimal. V1 should use `typer`, `rich`,
