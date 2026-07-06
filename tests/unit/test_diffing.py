@@ -94,7 +94,7 @@ def test_agent_rule_change_requires_scaffold_guard_check(tmp_path: Path) -> None
         settings=ProjectValidationSettings(package_name="demo", coverage=95),
     )
 
-    assert report.required_validation == ("uv run scaffold-guard check",)
+    assert report.required_validation == ("scaffold-guard check",)
     assert (
         "agent rules regenerated or rule compilation was not required" in report.required_evidence
     )

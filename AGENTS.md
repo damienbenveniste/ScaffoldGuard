@@ -9,7 +9,10 @@ configuration change in this repository.
   Python starter repositories designed for safe coding-agent collaboration.
 - Public user-facing docs should present `uv tool install scaffold-guard`
   followed by the installed `scaffold-guard` command. Do not advertise transient
-  no-install execution paths in user-facing install or quickstart flows.
+  no-install execution paths, `uvx`, or `uv run scaffold-guard ...` in
+  user-facing install or quickstart flows. Keep `uv run scaffold-guard ...` only
+  for repo-local development, CI, or generated agent operating instructions when
+  project-local dependency resolution is required.
 - Preserve the V1 promise: generate a Python project with clear agent
   instructions, strict local tooling, GitHub Actions CI, and policy checks that
   catch common agent mistakes.

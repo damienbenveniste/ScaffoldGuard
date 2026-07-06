@@ -15,13 +15,6 @@ uv tool install scaffold-guard
 scaffold-guard version
 ```
 
-From a local checkout:
-
-```bash
-uv sync --all-groups
-uv run scaffold-guard version
-```
-
 ## Publishing
 
 Maintainers publish `scaffold-guard` through GitHub Actions Trusted Publishing.
@@ -36,13 +29,12 @@ Generate a project with every supported adapter:
 scaffold-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
-uv run scaffold-guard check
-uv run scaffold-guard validate --quick
+scaffold-guard check
+scaffold-guard validate --quick
 ```
 
-Generated projects include `scaffold-guard` in the `dev` dependency group, so
-`uv run scaffold-guard ...` works inside the project after
-`uv sync --all-groups`.
+Generated projects include CI and local development defaults, but the user-facing
+CLI remains the installed `scaffold-guard` command.
 
 Generate for one agent surface:
 

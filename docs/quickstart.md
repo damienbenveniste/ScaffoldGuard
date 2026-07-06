@@ -13,13 +13,12 @@ scaffold-guard version
 scaffold-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
-uv run scaffold-guard check
-uv run scaffold-guard validate --quick
+scaffold-guard check
+scaffold-guard validate --quick
 ```
 
-Generated projects include `scaffold-guard` in the `dev` dependency group, so
-`uv run scaffold-guard ...` works inside the project after
-`uv sync --all-groups`.
+Generated projects include CI and local development defaults, but the
+user-facing CLI remains the installed `scaffold-guard` command.
 
 Use one adapter when you only need one agent surface:
 
@@ -40,8 +39,8 @@ scaffold-guard init demo --dry-run
 Refresh managed instruction files from inside a generated project:
 
 ```bash
-uv run scaffold-guard compile-rules --dry-run
-uv run scaffold-guard compile-rules --force
+scaffold-guard compile-rules --dry-run
+scaffold-guard compile-rules --force
 ```
 
 `compile-rules` refuses to overwrite manually edited instruction files unless

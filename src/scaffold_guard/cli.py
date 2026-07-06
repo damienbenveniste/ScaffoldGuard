@@ -80,8 +80,8 @@ def _print_init_summary(summary: ScaffoldSummary, *, agent: AgentOption) -> None
     typer.echo("Next:")
     typer.echo(f"  cd {summary.target_dir.name}")
     typer.echo("  uv sync --all-groups")
-    typer.echo("  uv run scaffold-guard check")
-    typer.echo("  uv run scaffold-guard validate")
+    typer.echo("  scaffold-guard check")
+    typer.echo("  scaffold-guard validate")
 
 
 def _print_check_report(report: CheckReport) -> None:

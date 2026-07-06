@@ -416,7 +416,7 @@ def _apply_agent_rules(
 ) -> None:
     """Add requirements caused by agent instruction changes."""
     if any(_is_agent_rule_file(path) for path in files):
-        validations.append("uv run scaffold-guard check")
+        validations.append("scaffold-guard check")
         evidence.append("agent rules regenerated or rule compilation was not required")
 
 

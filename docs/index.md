@@ -21,13 +21,12 @@ uv tool install scaffold-guard
 scaffold-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
-uv run scaffold-guard check
-uv run scaffold-guard validate --quick
+scaffold-guard check
+scaffold-guard validate --quick
 ```
 
-Generated projects include `scaffold-guard` in the `dev` dependency group, so
-use `uv run scaffold-guard ...` inside the project after
-`uv sync --all-groups`.
+Generated projects include CI and local development defaults, but the
+user-facing CLI remains the installed `scaffold-guard` command.
 
 Read the quickstart first, then use the adapter and checks pages when tuning a
 generated project.

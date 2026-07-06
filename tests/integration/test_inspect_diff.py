@@ -113,7 +113,7 @@ def test_inspect_diff_agent_rule_requires_check(
 
     assert result.exit_code == SUCCESS, result.output
     assert "agent instructions: AGENTS.md" in result.output
-    assert "uv run scaffold-guard check" in result.output
+    assert "scaffold-guard check" in result.output
 
 
 def test_inspect_diff_non_git_path_exits_with_configuration_error(tmp_path: Path) -> None:
