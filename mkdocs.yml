@@ -1,0 +1,12 @@
+site_name: agent-safe-python
+site_description: Generate agent-safe Python project starters for coding agents.
+repo_name: agent-safe-python
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Agent Adapters: adapters.md
+  - Generated Project: generated-project.md
+  - Checks: checks.md
+  - Releasing: releasing.md
