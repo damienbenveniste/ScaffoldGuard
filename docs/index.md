@@ -17,17 +17,17 @@ GitHub Actions CI, local policy checks, and agent instruction files.
 ## Basic Flow
 
 ```bash
-uvx scaffold-guard init my_project --agent all
+uv tool install scaffold-guard
+scaffold-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
 uv run scaffold-guard check
 uv run scaffold-guard validate --quick
 ```
 
-For repeated use, install the CLI with `uv tool install scaffold-guard` and run
-`scaffold-guard init ...` directly. Generated projects include
-`scaffold-guard` in the `dev` dependency group, so use
-`uv run scaffold-guard ...` after `uv sync --all-groups`.
+Generated projects include `scaffold-guard` in the `dev` dependency group, so
+use `uv run scaffold-guard ...` inside the project after
+`uv sync --all-groups`.
 
 Read the quickstart first, then use the adapter and checks pages when tuning a
 generated project.

@@ -21,7 +21,11 @@ uv build
 
 ```bash
 python -m zipfile -l dist/scaffold_guard-0.1.0-py3-none-any.whl | grep templates
-uvx --from dist/scaffold_guard-0.1.0-py3-none-any.whl scaffold-guard version
+tmpdir=$(mktemp -d)
+python -m venv "$tmpdir/venv"
+"$tmpdir/venv/bin/python" -m pip install dist/scaffold_guard-0.1.0-py3-none-any.whl
+"$tmpdir/venv/bin/scaffold-guard" version
+rm -rf "$tmpdir"
 ```
 
 The wheel must include the packaged templates under `scaffold_guard/templates/`.

@@ -7,6 +7,9 @@ configuration change in this repository.
 
 - Build `scaffold-guard`: a PyPI-installable Python CLI that generates strict
   Python starter repositories designed for safe coding-agent collaboration.
+- Public user-facing docs should present `uv tool install scaffold-guard`
+  followed by the installed `scaffold-guard` command. Do not advertise transient
+  no-install execution paths in user-facing install or quickstart flows.
 - Preserve the V1 promise: generate a Python project with clear agent
   instructions, strict local tooling, GitHub Actions CI, and policy checks that
   catch common agent mistakes.

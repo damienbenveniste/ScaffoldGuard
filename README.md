@@ -5,33 +5,21 @@ coding agents. It creates a typed package layout, local validation commands,
 GitHub Actions workflows, and agent instructions for Codex, Claude Code, and
 Cursor.
 
-The PyPI package and `uvx` entrypoint are `scaffold-guard`; the canonical
-installed command is `scaffold-guard`.
+The PyPI package is `scaffold-guard`; the installed command is
+`scaffold-guard`.
 
-## Run The CLI
-
-Run ScaffoldGuard without installing it globally:
-
-```bash
-uvx scaffold-guard version
-uvx scaffold-guard init my_project --agent all
-```
-
-For repeated use, install the CLI as a `uv` tool:
+## Install
 
 ```bash
 uv tool install scaffold-guard
 scaffold-guard version
-scaffold-guard init my_project --agent all
 ```
 
-From a local checkout or built wheel:
+From a local checkout:
 
 ```bash
 uv sync --all-groups
 uv run scaffold-guard version
-uv build
-uvx --from dist/scaffold_guard-0.1.0-py3-none-any.whl scaffold-guard version
 ```
 
 ## Publishing
@@ -45,24 +33,23 @@ or manually run the `Publish` workflow from `main`.
 Generate a project with every supported adapter:
 
 ```bash
-uvx scaffold-guard init my_project --agent all
+scaffold-guard init my_project --agent all
 cd my_project
 uv sync --all-groups
 uv run scaffold-guard check
 uv run scaffold-guard validate --quick
 ```
 
-If you installed the tool with `uv tool install scaffold-guard`, use
-`scaffold-guard init ...` instead of `uvx scaffold-guard init ...`.
 Generated projects include `scaffold-guard` in the `dev` dependency group, so
-`uv run scaffold-guard ...` works after `uv sync --all-groups`.
+`uv run scaffold-guard ...` works inside the project after
+`uv sync --all-groups`.
 
 Generate for one agent surface:
 
 ```bash
-uvx scaffold-guard init codex_demo --agent codex
-uvx scaffold-guard init claude_demo --agent claude
-uvx scaffold-guard init cursor_demo --agent cursor
+scaffold-guard init codex_demo --agent codex
+scaffold-guard init claude_demo --agent claude
+scaffold-guard init cursor_demo --agent cursor
 ```
 
 Use `--dry-run` to preview files and `--force` to overwrite known generated
