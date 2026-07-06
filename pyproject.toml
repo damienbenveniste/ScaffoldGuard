@@ -1,11 +1,11 @@
 [project]
-name = "repo-guard-cli"
+name = "agent-ready-python"
 version = "0.1.0"
 description = "Generate guarded Python project starters for Codex, Claude Code, and Cursor."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-keywords = ["agents", "codex", "cursor", "claude", "scaffold", "repo-guard", "repo-guard-cli"]
+keywords = ["agents", "codex", "cursor", "claude", "scaffold", "repo-guard", "agent-ready-python"]
 authors = [
     { name = "Damien Benveniste" },
 ]
@@ -37,6 +37,7 @@ Issues = "https://github.com/damienbenveniste/RepoGuard/issues"
 Documentation = "https://github.com/damienbenveniste/RepoGuard#readme"
 
 [project.scripts]
+agent-ready-python = "repo_guard.cli:app"
 repo-guard = "repo_guard.cli:app"
 
 [dependency-groups]

@@ -2,7 +2,7 @@
 
 **Purpose:** Implementation-ready plan for a coding agent to build V1 of a PyPI-installable Python starter CLI that creates **repo-guard Python repositories** with first-class **Codex**, **Claude Code**, and **Cursor** support.
 
-**Working PyPI package name:** `repo-guard-cli`
+**Working PyPI package name:** `agent-ready-python`
 **Working CLI command:** `repo-guard`
 **V1 user-facing promise:** “Generate a strict Python project that is ready for coding agents, with clear instructions, strict CI, and local policy checks that stop common agent mistakes.”
 
@@ -49,10 +49,10 @@ A Python developer who uses one or more coding agents:
 A user should be able to run:
 
 ```bash
-uvx --from repo-guard-cli repo-guard init my_project --agent codex
-uvx --from repo-guard-cli repo-guard init my_project --agent claude
-uvx --from repo-guard-cli repo-guard init my_project --agent cursor
-uvx --from repo-guard-cli repo-guard init my_project --agent all
+uvx agent-ready-python init my_project --agent codex
+uvx agent-ready-python init my_project --agent claude
+uvx agent-ready-python init my_project --agent cursor
+uvx agent-ready-python init my_project --agent all
 ```
 
 Then:
@@ -349,7 +349,7 @@ Use minimal but productive dependencies:
 
 ```toml
 [project]
-name = "repo-guard-cli"
+name = "agent-ready-python"
 version = "0.1.0"
 description = "Generate guarded Python project starters for Codex, Claude Code, and Cursor."
 requires-python = ">=3.11"
@@ -787,7 +787,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "repo-guard-cli>=0.1.0",
+    "agent-ready-python>=0.1.0",
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.6.0",
     "mypy>=1.17.0",
@@ -1586,7 +1586,7 @@ Example:
 Generate strict Python project starters for coding agents.
 
 ```bash
-uvx --from repo-guard-cli repo-guard init my_project --agent all
+uvx agent-ready-python init my_project --agent all
 cd my_project
 uv sync --all-groups
 uv run repo-guard validate
