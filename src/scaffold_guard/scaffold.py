@@ -3,7 +3,7 @@
 import keyword
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from scaffold_guard.adapters import adapters_for
@@ -26,7 +26,6 @@ PACKAGE_TEMPLATE_SPECS = (
     TemplateSpec("package/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
     TemplateSpec("package/pyproject.toml.j2", "pyproject.toml"),
-    TemplateSpec("package/pyrightconfig.json.j2", "pyrightconfig.json"),
     TemplateSpec("package/gitignore.j2", ".gitignore"),
     TemplateSpec("package/scaffold-guard.toml.j2", "scaffold-guard.toml"),
     TemplateSpec("package/docs/index.md.j2", "docs/index.md"),
@@ -126,9 +125,30 @@ def build_init_options(
     )
 
 
+def with_quality_tools(
+    options: InitOptions,
+    *,
+    ruff: bool,
+    mypy: bool,
+    pyright: bool,
+) -> InitOptions:
+    """Return init options with explicit generated quality-tool selections."""
+    return replace(options, ruff_enabled=ruff, mypy_enabled=mypy, pyright_enabled=pyright)
+
+
 def build_render_context(options: InitOptions) -> Mapping[str, object]:
     """Return the shared template context for a generated package project."""
     ci_enabled = options.ci == "github"
+    configured_tools = _format_tool_list(
+        (
+            *(() if not options.ruff_enabled else ("Ruff",)),
+            *(() if not options.mypy_enabled else ("mypy",)),
+            *(() if not options.pyright_enabled else ("Pyright",)),
+            "pytest",
+            "coverage",
+            "MkDocs",
+        )
+    )
     return {
         "project_slug": options.project_slug,
         "package_name": options.package_name,
@@ -136,6 +156,13 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "license": options.license,
         "python_min": options.python_min,
         "coverage": options.coverage,
+        "configured_tools": configured_tools,
+        "use_ruff": options.ruff_enabled,
+        "use_mypy": options.mypy_enabled,
+        "use_pyright": options.pyright_enabled,
+        "ruff_enabled": _toml_bool(options.ruff_enabled),
+        "mypy_enabled": _toml_bool(options.mypy_enabled),
+        "pyright_enabled": _toml_bool(options.pyright_enabled),
         "codex_enabled": _toml_bool(options.codex_enabled),
         "claude_enabled": _toml_bool(options.claude_enabled),
         "cursor_enabled": _toml_bool(options.cursor_enabled),
@@ -164,9 +191,14 @@ def package_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
     adapter_specs = tuple(
         spec for adapter in adapters_for(options.agent) for spec in adapter.template_specs()
     )
-    profile_specs = (
+    profile_specs: tuple[TemplateSpec, ...] = (
         MINIMAL_TEMPLATE_SPECS if options.profile == "minimal" else PACKAGE_TEMPLATE_SPECS
     )
+    if options.profile == "package" and options.pyright_enabled:
+        profile_specs = (
+            *profile_specs,
+            TemplateSpec("package/pyrightconfig.json.j2", "pyrightconfig.json"),
+        )
     return (*profile_specs, *adapter_specs)
 
 
@@ -259,3 +291,13 @@ def write_rendered_files(
 def _toml_bool(value: bool) -> str:
     """Render a Python boolean as TOML lowercase text."""
     return "true" if value else "false"
+
+
+def _format_tool_list(tools: tuple[str, ...]) -> str:
+    """Format configured tool names for generated prose."""
+    pair_count = 2
+    if len(tools) == 1:
+        return tools[0]
+    if len(tools) == pair_count:
+        return f"{tools[0]} and {tools[1]}"
+    return f"{', '.join(tools[:-1])}, and {tools[-1]}"

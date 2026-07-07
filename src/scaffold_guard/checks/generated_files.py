@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled, project_profile
+from scaffold_guard.checks.config import ci_enabled, project_profile, tool_enabled
 from scaffold_guard.checks.files import iter_text_files, read_lines, relative_to_root
 
 AGENT_FILE_PATHS = (
@@ -12,7 +12,7 @@ AGENT_FILE_PATHS = (
     Path(".claude/rules"),
     Path(".cursor/rules"),
 )
-CI_TOKENS = ("uv sync", "ruff", "mypy", "pyright", "pytest", "mkdocs")
+PACKAGE_BASE_CI_TOKENS = ("uv sync", "pytest", "mkdocs")
 MINIMAL_CI_TOKENS = ("uv tool install scaffold-guard", "scaffold-guard check")
 
 
@@ -104,7 +104,9 @@ def _check_ci_workflow(root: Path) -> list[CheckFinding]:
     if not workflow_path.exists():
         return []
     content = workflow_path.read_text(encoding="utf-8", errors="replace").lower()
-    expected_tokens = MINIMAL_CI_TOKENS if project_profile(root) == "minimal" else CI_TOKENS
+    expected_tokens = (
+        MINIMAL_CI_TOKENS if project_profile(root) == "minimal" else _package_ci_tokens(root)
+    )
     return [
         finding(
             ".github/workflows/ci.yml",
@@ -115,6 +117,18 @@ def _check_ci_workflow(root: Path) -> list[CheckFinding]:
         for token in expected_tokens
         if token not in content
     ]
+
+
+def _package_ci_tokens(root: Path) -> tuple[str, ...]:
+    """Return required package CI tokens for the configured toolchain."""
+    tokens: list[str] = list(PACKAGE_BASE_CI_TOKENS)
+    if tool_enabled(root, "ruff"):
+        tokens.append("ruff")
+    if tool_enabled(root, "mypy"):
+        tokens.append("mypy")
+    if tool_enabled(root, "pyright"):
+        tokens.append("pyright")
+    return tuple(tokens)
 
 
 def _frontmatter_lines(lines: list[str]) -> list[str]:

@@ -1,8 +1,12 @@
 .DS_Store
 .coverage
+{% if use_mypy %}
 .mypy_cache/
+{% endif %}
 .pytest_cache/
+{% if use_ruff %}
 .ruff_cache/
+{% endif %}
 .venv/
 build/
 dist/

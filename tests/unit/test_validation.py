@@ -62,6 +62,31 @@ def test_validation_commands_for_minimal_profile_run_policy_check_only(
     assert validation_commands(config, quick=False) == (("scaffold-guard", "check"),)
 
 
+def test_validation_commands_respect_disabled_quality_tools(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Configured package validation omits disabled quality tools."""
+    project_dir = generated_project(tmp_path, ruff=False, mypy=False, pyright=False)
+    config = load_generated_project_config(project_dir)
+
+    quick = validation_commands(config, quick=True)
+    full = validation_commands(config, quick=False)
+    quick_text = [" ".join(command) for command in quick]
+    full_text = [" ".join(command) for command in full]
+
+    assert quick == (
+        ("uv", "run", "pytest", "tests/unit"),
+        ("scaffold-guard", "check"),
+    )
+    assert not any("ruff" in command for command in quick_text)
+    assert not any("ruff" in command for command in full_text)
+    assert not any("mypy" in command for command in full_text)
+    assert not any("pyright" in command for command in full_text)
+    assert "uv run mkdocs build --strict" in full_text
+    assert any(command.startswith("uv run pytest tests --cov=demo") for command in full_text)
+
+
 def test_validate_quick_json_stops_on_first_failing_command(
     tmp_path: Path,
     generated_project: Callable[..., Path],

@@ -33,6 +33,9 @@ class InitOptions:
     docs_enabled: bool
     dry_run: bool
     force: bool
+    ruff_enabled: bool = True
+    mypy_enabled: bool = True
+    pyright_enabled: bool = True
 
     @property
     def codex_enabled(self) -> bool:

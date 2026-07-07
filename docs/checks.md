@@ -21,9 +21,9 @@ Exit codes:
 
 Detects common risky agent outputs, including:
 
-- `# type: ignore`;
-- `# pyright: ignore`;
-- `# noqa:`;
+- `# type: ignore` when mypy policy is enabled;
+- `# pyright: ignore` when Pyright policy is enabled;
+- `# noqa:` when Ruff policy is enabled;
 - `Any` imports and `dict[str, Any]`;
 - suspicious secret literals;
 - `subprocess.run(..., shell=True)`;
@@ -32,13 +32,14 @@ Detects common risky agent outputs, including:
 ### project-health
 
 Verifies the expected generated project structure exists, including
-`pyproject.toml`, `pyrightconfig.json`, `AGENTS.md`, source, tests, docs, CI, and
-adapter-specific files.
+`pyproject.toml`, `AGENTS.md`, source, tests, docs, CI, adapter-specific files,
+and `pyrightconfig.json` when Pyright is enabled.
 
 ### generated-files
 
 Checks generated instruction and support files for unresolved template
-placeholders, valid Cursor frontmatter, README `uv` commands, and CI commands.
+placeholders, valid Cursor frontmatter, README `uv` commands, and CI commands
+for the enabled toolchain.
 
 ### config-consistency
 

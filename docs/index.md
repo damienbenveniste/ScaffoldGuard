@@ -31,8 +31,9 @@ scaffold-guard validate --quick
 The `init` command starts guided setup when `NAME` is omitted. Leave the
 project-name prompt blank to initialize the current empty folder, or enter a
 name to create a new project directory. Choose `package` when you want
-`src/`, tests, docs, and Python tooling. Pass `NAME` and flags for
-non-interactive use.
+`src/`, tests, docs, and Python tooling. Package guided setup asks whether to
+enable Ruff, mypy, and Pyright; all three default to enabled. Pass `NAME` and
+flags for non-interactive use with defaults.
 
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.

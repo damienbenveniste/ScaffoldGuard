@@ -7,7 +7,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from scaffold_guard.checks.config import int_value, load_scaffold_guard_toml, str_value, table_value
+from scaffold_guard.checks.config import (
+    bool_value,
+    int_value,
+    load_scaffold_guard_toml,
+    str_value,
+    table_value,
+)
 
 PUBLIC_SYMBOL = re.compile(r"^(?:def|class)\s+([A-Za-z][A-Za-z0-9_]*)\b", flags=re.MULTILINE)
 GIT_NOT_FOUND = 127
@@ -79,6 +85,9 @@ class ProjectValidationSettings:
 
     package_name: str | None
     coverage: int | None
+    ruff: bool = True
+    mypy: bool = True
+    pyright: bool = True
 
 
 def inspect_diff(path: Path, *, base: str) -> DiffReport:
@@ -193,9 +202,14 @@ def load_project_validation_settings(root: Path) -> ProjectValidationSettings:
     """Load project package and coverage settings for validation command hints."""
     config = load_scaffold_guard_toml(root)
     project = table_value(config, "project")
+    tools = table_value(config, "tools")
+    tool_default = (str_value(project, "profile") or "package") == "package"
     return ProjectValidationSettings(
         package_name=str_value(project, "package"),
         coverage=int_value(project, "coverage_fail_under"),
+        ruff=bool_value(tools, "ruff", default=tool_default),
+        mypy=bool_value(tools, "mypy", default=tool_default),
+        pyright=bool_value(tools, "pyright", default=tool_default),
     )
 
 
@@ -340,16 +354,16 @@ def _apply_source_rules(
     """Add requirements caused by source changes."""
     if not any(_is_source_file(path) for path in files):
         return
-    _add_many(
-        validations,
-        (
-            "uv run ruff format --check .",
-            "uv run ruff check .",
-            "uv run mypy src tests",
-            "uv run pyright",
-            _pytest_command(settings),
-        ),
-    )
+    if settings.ruff:
+        _add_many(
+            validations,
+            ("uv run ruff format --check .", "uv run ruff check ."),
+        )
+    if settings.mypy:
+        validations.append("uv run mypy src tests")
+    if settings.pyright:
+        validations.append("uv run pyright")
+    validations.append(_pytest_command(settings))
     evidence.append("tests changed or added for behavior change")
     if not tests_changed:
         warnings.append("Source changed without a detected tests/ change.")

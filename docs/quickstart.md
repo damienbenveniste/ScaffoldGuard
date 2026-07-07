@@ -22,7 +22,7 @@ scaffold-guard validate --quick
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.
 
-For non-interactive use, pass the options as flags:
+For non-interactive use with defaults, pass the options as flags:
 
 ```bash
 scaffold-guard init my_project --agent all
@@ -44,10 +44,12 @@ scaffold-guard init claude_demo --agent claude
 scaffold-guard init cursor_demo --agent cursor
 ```
 
-Use the `package` profile when you want a full Python package layout:
+Use the `package` profile when you want a full Python package layout. Guided
+setup lets you keep or disable Ruff, mypy, and Pyright; all three are enabled
+by default.
 
 ```bash
-scaffold-guard init package_demo --profile package --agent all
+scaffold-guard init package_demo --guided
 cd package_demo
 uv sync --all-groups
 scaffold-guard validate --quick

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from scaffold_guard.models import AgentChoice, ProfileChoice
-from scaffold_guard.scaffold import build_init_options, scaffold_package_project
+from scaffold_guard.scaffold import build_init_options, scaffold_package_project, with_quality_tools
 
 
 @pytest.fixture
@@ -18,6 +18,9 @@ def generated_project() -> Callable[..., Path]:
         *,
         agent: AgentChoice = "all",
         profile: ProfileChoice = "package",
+        ruff: bool = True,
+        mypy: bool = True,
+        pyright: bool = True,
     ) -> Path:
         options = build_init_options(
             "demo",
@@ -31,6 +34,7 @@ def generated_project() -> Callable[..., Path]:
             dry_run=False,
             force=False,
         )
+        options = with_quality_tools(options, ruff=ruff, mypy=mypy, pyright=pyright)
         scaffold_package_project(options)
         return tmp_path / "demo"
 

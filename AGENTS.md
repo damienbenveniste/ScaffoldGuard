@@ -89,8 +89,12 @@ configuration change in this repository.
   included in wheels.
 - Use `importlib.resources.files()` to load packaged templates.
 - Use `subprocess.run` without `shell=True` for command execution.
-- Keep Ruff, mypy, Pyright, pytest, coverage, and MkDocs gates strict once the
-  scaffold exists.
+- Keep enabled Ruff, mypy, Pyright, pytest, coverage, and MkDocs gates strict
+  once the scaffold exists.
+- Do not assume generated package projects always use Ruff, mypy, or Pyright.
+  When these tools are configurable, generated dependencies, config files, CI,
+  validation commands, checks, docs, and agent instructions must all honor the
+  selected tool set.
 - Write clear docstrings for public modules, classes, functions, and methods
   when the behavior is not obvious from the name and types.
 

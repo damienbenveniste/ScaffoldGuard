@@ -81,30 +81,38 @@ def validation_commands(
     """Return fixed V1 validation commands for a generated project."""
     if config.profile == "minimal":
         return (("scaffold-guard", "check"),)
+    commands: list[tuple[str, ...]] = []
+    if config.ruff:
+        commands.extend(
+            (
+                ("uv", "run", "ruff", "format", "--check", "."),
+                ("uv", "run", "ruff", "check", "."),
+            )
+        )
     if quick:
-        return (
-            ("uv", "run", "ruff", "format", "--check", "."),
-            ("uv", "run", "ruff", "check", "."),
-            ("uv", "run", "pytest", "tests/unit"),
+        commands.extend((("uv", "run", "pytest", "tests/unit"), ("scaffold-guard", "check")))
+        return tuple(commands)
+    if config.mypy:
+        commands.append(("uv", "run", "mypy", "src", "tests", "examples"))
+    if config.pyright:
+        commands.append(("uv", "run", "pyright"))
+    if config.docs:
+        commands.append(("uv", "run", "mkdocs", "build", "--strict"))
+    commands.extend(
+        (
+            (
+                "uv",
+                "run",
+                "pytest",
+                "tests",
+                f"--cov={config.package}",
+                "--cov-report=term-missing",
+                f"--cov-fail-under={config.coverage_fail_under}",
+            ),
             ("scaffold-guard", "check"),
         )
-    return (
-        ("uv", "run", "ruff", "format", "--check", "."),
-        ("uv", "run", "ruff", "check", "."),
-        ("uv", "run", "mypy", "src", "tests", "examples"),
-        ("uv", "run", "pyright"),
-        ("uv", "run", "mkdocs", "build", "--strict"),
-        (
-            "uv",
-            "run",
-            "pytest",
-            "tests",
-            f"--cov={config.package}",
-            "--cov-report=term-missing",
-            f"--cov-fail-under={config.coverage_fail_under}",
-        ),
-        ("scaffold-guard", "check"),
     )
+    return tuple(commands)
 
 
 def run_validation(path: Path, *, quick: bool, capture: bool) -> ValidationReport:

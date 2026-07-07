@@ -39,8 +39,32 @@ def test_generated_project_config_round_trips_agent_selection(
     assert options.agent == expected_choice
     assert options.target_dir == project_dir
     assert options.package_name == "demo"
+    assert options.ruff_enabled
+    assert options.mypy_enabled
+    assert options.pyright_enabled
     assert payload["name"] == "demo"
     assert payload["agents"] == expected_flags
+    assert payload["tools"] == {"ruff": True, "mypy": True, "pyright": True}
+
+
+def test_generated_project_config_round_trips_tool_selection(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Generated config exposes disabled quality-tool choices."""
+    project_dir = generated_project(tmp_path, ruff=False, mypy=False, pyright=False)
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+    payload = config.to_json()
+
+    assert not config.ruff
+    assert not config.mypy
+    assert not config.pyright
+    assert not options.ruff_enabled
+    assert not options.mypy_enabled
+    assert not options.pyright_enabled
+    assert payload["tools"] == {"ruff": False, "mypy": False, "pyright": False}
 
 
 def test_generated_project_config_rejects_missing_required_fields(

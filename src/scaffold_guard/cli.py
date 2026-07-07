@@ -20,6 +20,7 @@ from scaffold_guard.scaffold import (
     build_init_options,
     normalize_project_name,
     scaffold_package_project,
+    with_quality_tools,
 )
 from scaffold_guard.validation import ValidationError, ValidationReport, run_validation
 
@@ -90,6 +91,9 @@ def _print_init_summary(
     *,
     agent: AgentOption,
     profile: ProfileOption,
+    ruff: bool,
+    mypy: bool,
+    pyright: bool,
 ) -> None:
     """Print the user-facing summary after init planning or creation."""
     action = "Planned" if summary.dry_run else "Created"
@@ -105,6 +109,12 @@ def _print_init_summary(
         typer.echo("  - Claude Code: CLAUDE.md + .claude/rules/")
     if agent in {AgentOption.CURSOR, AgentOption.ALL}:
         typer.echo("  - Cursor: .cursor/rules/*.mdc + AGENTS.md")
+    if profile == ProfileOption.PACKAGE:
+        typer.echo()
+        typer.echo("Python tooling:")
+        typer.echo(f"  - Ruff: {'enabled' if ruff else 'disabled'}")
+        typer.echo(f"  - mypy: {'enabled' if mypy else 'disabled'}")
+        typer.echo(f"  - Pyright: {'enabled' if pyright else 'disabled'}")
     typer.echo()
     typer.echo("Next:")
     if summary.target_dir.resolve(strict=False) != Path.cwd().resolve(strict=False):
@@ -179,6 +189,16 @@ def _prompt_coverage(default: int) -> int:
         )
 
 
+def _prompt_enabled(label: str, *, default: bool) -> bool:
+    """Prompt for an enabled/disabled feature selection."""
+    answer = _prompt_choice(
+        label,
+        choices=("yes", "no"),
+        default="yes" if default else "no",
+    )
+    return answer == "yes"
+
+
 def _prompt_init_options(
     *,
     name: str | None,
@@ -188,7 +208,7 @@ def _prompt_init_options(
     python_min: str,
     coverage: int,
     ci: CiOption,
-) -> tuple[str, AgentOption, ProfileOption, LicenseOption, str, int, CiOption]:
+) -> tuple[str, AgentOption, ProfileOption, LicenseOption, str, int, CiOption, bool, bool, bool]:
     """Prompt for init options while preserving current flag defaults."""
     typer.echo("ScaffoldGuard guided setup")
     typer.echo()
@@ -216,9 +236,15 @@ def _prompt_init_options(
     )
     prompted_python_min = python_min
     prompted_coverage = coverage
+    prompted_ruff = True
+    prompted_mypy = True
+    prompted_pyright = True
     if prompted_profile == ProfileOption.PACKAGE:
         prompted_python_min = _prompt_text("Minimum Python version", default=python_min)
         prompted_coverage = _prompt_coverage(coverage)
+        prompted_ruff = _prompt_enabled("Use Ruff for formatting and linting", default=True)
+        prompted_mypy = _prompt_enabled("Use mypy for type checking", default=True)
+        prompted_pyright = _prompt_enabled("Use Pyright for type checking", default=True)
     prompted_ci = CiOption(
         _prompt_choice(
             "CI provider",
@@ -234,6 +260,9 @@ def _prompt_init_options(
         prompted_python_min,
         prompted_coverage,
         prompted_ci,
+        prompted_ruff,
+        prompted_mypy,
+        prompted_pyright,
     )
 
 
@@ -382,8 +411,22 @@ def init_command(
     force: Annotated[bool, typer.Option("--force", help="Overwrite generated files.")] = False,
 ) -> None:
     """Create a new ScaffoldGuard project."""
+    ruff = True
+    mypy = True
+    pyright = True
     if _should_prompt_init(name=name, guided=guided):
-        name, agent, profile, license_name, python_min, coverage, ci = _prompt_init_options(
+        (
+            name,
+            agent,
+            profile,
+            license_name,
+            python_min,
+            coverage,
+            ci,
+            ruff,
+            mypy,
+            pyright,
+        ) = _prompt_init_options(
             name=name,
             agent=agent,
             profile=profile,
@@ -407,10 +450,13 @@ def init_command(
             dry_run=dry_run,
             force=force,
         )
+        options = with_quality_tools(options, ruff=ruff, mypy=mypy, pyright=pyright)
         summary = scaffold_package_project(options)
     except (FileExistsError, NotADirectoryError, ValueError) as exc:
         _fail(str(exc))
-    _print_init_summary(summary, agent=agent, profile=profile)
+    _print_init_summary(
+        summary, agent=agent, profile=profile, ruff=ruff, mypy=mypy, pyright=pyright
+    )
 
 
 @app.command("check")

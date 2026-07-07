@@ -36,6 +36,30 @@ def test_source_change_requires_tests_validation_and_docs_evidence(tmp_path: Pat
     assert "Source changed without a detected tests/ change." in report.warnings
 
 
+def test_source_change_respects_disabled_quality_tools(tmp_path: Path) -> None:
+    """Source validation hints omit disabled quality tools."""
+    root = _generated_project(tmp_path)
+
+    report = classify_changed_files(
+        root,
+        changed_files=(Path("src/demo/core.py"),),
+        base="main",
+        settings=ProjectValidationSettings(
+            package_name="demo",
+            coverage=95,
+            ruff=False,
+            mypy=False,
+            pyright=False,
+        ),
+    )
+
+    assert "uv run ruff format --check ." not in report.required_validation
+    assert "uv run ruff check ." not in report.required_validation
+    assert "uv run mypy src tests" not in report.required_validation
+    assert "uv run pyright" not in report.required_validation
+    assert "uv run pytest tests --cov=demo --cov-fail-under=95" in report.required_validation
+
+
 def test_init_file_change_requires_import_integration_test(tmp_path: Path) -> None:
     """Package `__init__` changes require import integration validation."""
     root = _generated_project(tmp_path)

@@ -64,3 +64,17 @@ def project_profile(root: Path) -> str:
     config = load_scaffold_guard_toml(root)
     project = table_value(config, "project")
     return str_value(project, "profile") or "package"
+
+
+def tool_enabled(root: Path, name: str) -> bool:
+    """Return whether a generated project has a named quality tool enabled."""
+    config = load_scaffold_guard_toml(root)
+    tools = table_value(config, "tools")
+    return bool_value(tools, name, default=project_profile(root) == "package")
+
+
+def policy_enabled(root: Path, name: str) -> bool:
+    """Return whether a generated project has a named policy rule enabled."""
+    config = load_scaffold_guard_toml(root)
+    policy = table_value(config, "policy")
+    return bool_value(policy, name, default=True)

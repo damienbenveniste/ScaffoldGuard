@@ -35,6 +35,9 @@ class GeneratedProjectConfig:
     cursor: bool
     docs: bool
     github_actions: bool
+    ruff: bool
+    mypy: bool
+    pyright: bool
 
     @property
     def agent_choice(self) -> AgentChoice:
@@ -62,6 +65,9 @@ class GeneratedProjectConfig:
             docs_enabled=self.docs,
             dry_run=dry_run,
             force=force,
+            ruff_enabled=self.ruff,
+            mypy_enabled=self.mypy,
+            pyright_enabled=self.pyright,
         )
 
     def to_json(self) -> dict[str, object]:
@@ -81,6 +87,11 @@ class GeneratedProjectConfig:
                 "docs": self.docs,
                 "github_actions": self.github_actions,
             },
+            "tools": {
+                "ruff": self.ruff,
+                "mypy": self.mypy,
+                "pyright": self.pyright,
+            },
         }
 
 
@@ -96,10 +107,12 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     project = table_value(config, "project")
     agents = table_value(config, "agents")
     features = table_value(config, "features")
+    tools = table_value(config, "tools")
 
     name = _required_str(project, "name")
     package = _required_str(project, "package")
     profile = _required_profile(project, "profile")
+    tool_default = profile == "package"
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
     return GeneratedProjectConfig(
@@ -114,6 +127,9 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
         cursor=bool_value(agents, "cursor", default=False),
         docs=bool_value(features, "docs", default=True),
         github_actions=bool_value(features, "github_actions", default=True),
+        ruff=bool_value(tools, "ruff", default=tool_default),
+        mypy=bool_value(tools, "mypy", default=tool_default),
+        pyright=bool_value(tools, "pyright", default=tool_default),
     )
 
 

@@ -14,6 +14,7 @@ from scaffold_guard.scaffold import (
     render_file,
     render_package_files,
     scaffold_package_project,
+    with_quality_tools,
     write_rendered_files,
 )
 
@@ -82,6 +83,30 @@ def test_build_init_options_uses_current_base_directory(tmp_path: Path) -> None:
     assert options.target_dir == tmp_path / "demo-project"
     assert options.project_slug == "demo-project"
     assert options.package_name == "demo_project"
+    assert options.ruff_enabled
+    assert options.mypy_enabled
+    assert options.pyright_enabled
+
+
+def test_build_init_options_accepts_disabled_quality_tools(tmp_path: Path) -> None:
+    """CLI tool selections are retained in scaffold options."""
+    options = build_init_options(
+        "demo",
+        base_dir=tmp_path,
+        agent="all",
+        profile="package",
+        license_name="MIT",
+        python_min="3.13",
+        coverage=95,
+        ci="github",
+        dry_run=False,
+        force=False,
+    )
+    options = with_quality_tools(options, ruff=False, mypy=False, pyright=False)
+
+    assert not options.ruff_enabled
+    assert not options.mypy_enabled
+    assert not options.pyright_enabled
 
 
 def test_build_init_options_can_target_current_directory(tmp_path: Path) -> None:
@@ -121,6 +146,15 @@ def test_package_template_specs_include_selected_adapters(tmp_path: Path) -> Non
     assert "CLAUDE.md" in all_destinations
     assert ".claude/rules/python.md" in all_destinations
     assert ".cursor/rules/python.mdc" in all_destinations
+
+
+def test_package_template_specs_omit_pyright_config_when_disabled(tmp_path: Path) -> None:
+    """Pyright-specific config is only generated when Pyright is enabled."""
+    options = _init_options(tmp_path, agent="codex", pyright=False)
+
+    destinations = {spec.destination for spec in package_template_specs(options)}
+
+    assert "pyrightconfig.json" not in destinations
 
 
 def test_render_package_files_has_no_project_jinja_placeholders(tmp_path: Path) -> None:
@@ -296,9 +330,12 @@ def _init_options(
     agent: AgentChoice,
     dry_run: bool = False,
     force: bool = False,
+    ruff: bool = True,
+    mypy: bool = True,
+    pyright: bool = True,
 ) -> InitOptions:
     """Build standard test init options."""
-    return build_init_options(
+    options = build_init_options(
         "demo",
         base_dir=tmp_path,
         agent=agent,
@@ -310,3 +347,4 @@ def _init_options(
         dry_run=dry_run,
         force=force,
     )
+    return with_quality_tools(options, ruff=ruff, mypy=mypy, pyright=pyright)

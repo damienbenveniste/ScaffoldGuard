@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled, docs_enabled, project_profile
+from scaffold_guard.checks.config import ci_enabled, docs_enabled, project_profile, tool_enabled
 
 
 def check_project_health(root: Path) -> CheckResult:
@@ -25,11 +25,12 @@ def _missing_required_paths(root: Path) -> list[CheckFinding]:
         required_paths.extend(
             [
                 Path("pyproject.toml"),
-                Path("pyrightconfig.json"),
                 Path("src"),
                 Path("tests"),
             ]
         )
+        if tool_enabled(root, "pyright"):
+            required_paths.append(Path("pyrightconfig.json"))
         if docs_enabled(root):
             required_paths.append(Path("docs"))
     if ci_enabled(root):

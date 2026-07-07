@@ -91,6 +91,41 @@ def test_unsafe_patterns_detects_type_ignore(tmp_path: Path) -> None:
     assert any(finding.code == "no-type-ignore" for finding in result.findings)
 
 
+def test_unsafe_patterns_respects_disabled_suppression_policies(tmp_path: Path) -> None:
+    """Tool-specific suppression bans follow generated policy config."""
+    project_dir = _generated_project(tmp_path)
+    core_path = project_dir / "src/demo/core.py"
+    core_path.write_text(
+        "\n".join(
+            [
+                core_path.read_text(encoding="utf-8"),
+                "value = 1  # type: ignore",
+                "other = 2  # pyright: ignore",
+                "lint = 3  # noqa: F841",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    _replace_text(
+        project_dir / "scaffold-guard.toml",
+        "forbid_type_ignore = true",
+        "forbid_type_ignore = false",
+    )
+    _replace_text(
+        project_dir / "scaffold-guard.toml",
+        "forbid_pyright_ignore = true",
+        "forbid_pyright_ignore = false",
+    )
+    _replace_text(project_dir / "scaffold-guard.toml", "forbid_noqa = true", "forbid_noqa = false")
+
+    result = check_unsafe_patterns(project_dir)
+    codes = {finding.code for finding in result.findings}
+
+    assert "no-type-ignore" not in codes
+    assert "no-pyright-ignore" not in codes
+    assert "no-noqa" not in codes
+
+
 def test_unsafe_patterns_detects_additional_risky_code(tmp_path: Path) -> None:
     """Unsafe-patterns catches typing, secret, shell, and absolute-write issues."""
     project_dir = _generated_project(tmp_path)
@@ -257,6 +292,22 @@ def test_generated_files_detects_missing_readme_uv_and_ci_tools(tmp_path: Path) 
     codes = {finding.code for finding in result.findings}
 
     assert {"readme-missing-uv", "ci-missing-tool"}.issubset(codes)
+
+
+def test_generated_files_respects_disabled_ci_tool_tokens(tmp_path: Path) -> None:
+    """CI token checks only require enabled package tools."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(project_dir / "scaffold-guard.toml", "ruff = true", "ruff = false")
+    _replace_text(project_dir / "scaffold-guard.toml", "mypy = true", "mypy = false")
+    _replace_text(project_dir / "scaffold-guard.toml", "pyright = true", "pyright = false")
+    (project_dir / ".github/workflows/ci.yml").write_text(
+        "name: CI\nrun: uv sync && pytest && mkdocs\n",
+        encoding="utf-8",
+    )
+
+    result = check_generated_files(project_dir)
+
+    assert result.ok
 
 
 def test_generated_files_allows_missing_optional_generated_files(tmp_path: Path) -> None:

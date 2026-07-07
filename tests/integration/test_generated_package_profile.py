@@ -4,6 +4,7 @@ import importlib
 import json
 import py_compile
 import sys
+import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -77,6 +78,52 @@ def test_init_codex_generates_valid_package_tree(
     with _import_from_project(project_dir):
         package = cast(GreetingPackage, importlib.import_module("demo"))
         assert package.greet("Codex") == "Hello, Codex!"
+
+
+def test_init_package_can_disable_quality_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Package scaffolds can opt out of Ruff, mypy, and Pyright."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--guided"],
+        input="\ncodex\npackage\nMIT\n3.13\n95\nno\nno\nno\ngithub\n",
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    assert Path("pyrightconfig.json") not in _relative_files(project_dir)
+    pyproject = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    ci_workflow = (project_dir / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    config = (project_dir / "scaffold-guard.toml").read_text(encoding="utf-8")
+    agents = (project_dir / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert '"ruff>=' not in pyproject
+    assert '"mypy>=' not in pyproject
+    assert '"pyright>=' not in pyproject
+    assert "[tool.ruff]" not in pyproject
+    assert "[tool.mypy]" not in pyproject
+    assert tomllib.loads(pyproject)["dependency-groups"]
+    assert tomllib.loads(config)["tools"] == {"ruff": False, "mypy": False, "pyright": False}
+    assert "ruff" not in ci_workflow
+    assert "mypy" not in ci_workflow
+    assert "pyright" not in ci_workflow.lower()
+    assert "ruff = false" in config
+    assert "mypy = false" in config
+    assert "pyright = false" in config
+    assert "forbid_noqa = false" in config
+    assert "forbid_type_ignore = false" in config
+    assert "forbid_pyright_ignore = false" in config
+    assert "Ruff: disabled" in result.output
+    assert "mypy: disabled" in result.output
+    assert "Pyright: disabled" in result.output
+    assert "ScaffoldGuard guided setup" in result.output
+    assert "uv run ruff" not in agents
+    assert "uv run mypy" not in agents
+    assert "uv run pyright" not in agents
 
 
 def test_check_passes_in_fresh_generated_project(
@@ -191,7 +238,7 @@ def test_init_without_name_runs_guided_setup(
     result = CliRunner().invoke(
         app,
         ["init"],
-        input="guided-demo\nclaude\npackage\nApache-2.0\n3.14\n90\n\n",
+        input="guided-demo\nclaude\npackage\nApache-2.0\n3.14\n90\nyes\nyes\nyes\ngithub\n",
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -219,13 +266,17 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     result = CliRunner().invoke(
         app,
         ["init"],
-        input="demo\nbad-agent\ncodex\npackage\nMIT\n3.13\nnot-a-number\n101\n95\ngithub\n",
+        input=(
+            "demo\nbad-agent\ncodex\npackage\nMIT\n3.13\n"
+            "not-a-number\n101\n95\nmaybe\nyes\nyes\nyes\ngithub\n"
+        ),
     )
 
     assert result.exit_code == SUCCESS, result.output
     assert (tmp_path / "demo/AGENTS.md").exists()
     assert not (tmp_path / "demo/CLAUDE.md").exists()
     assert "Choose one of: codex, claude, cursor, all" in result.output
+    assert "Choose one of: yes, no" in result.output
     assert "Coverage floor must be an integer." in result.output
     assert "Coverage floor must be between 1 and 100." in result.output
 

@@ -13,7 +13,8 @@ my_project/
 ```
 
 The `package` profile creates a typed Python package with docs, examples,
-tests, CI, and agent instructions.
+tests, CI, and agent instructions. Ruff, mypy, and Pyright are enabled by
+default, but package guided setup can disable any of them.
 
 ```text
 my_project/
@@ -21,7 +22,7 @@ my_project/
   README.md
   LICENSE
   pyproject.toml
-  pyrightconfig.json
+  pyrightconfig.json  # when Pyright is enabled
   scaffold-guard.toml
   .github/workflows/ci.yml
   .github/workflows/docs.yml
@@ -48,6 +49,7 @@ CLAUDE.md
 
 - project name and import package;
 - selected agent adapters;
+- enabled package tools;
 - docs and GitHub Actions feature flags;
 - Python and coverage settings;
 - fixed quick and full validation command descriptions.
@@ -64,7 +66,8 @@ scaffold-guard check
 scaffold-guard validate --quick
 ```
 
-Package projects additionally use their generated Python toolchain:
+Package projects additionally use their generated Python toolchain. Validation
+commands only include Ruff, mypy, and Pyright when those tools are enabled:
 
 ```bash
 uv sync --all-groups

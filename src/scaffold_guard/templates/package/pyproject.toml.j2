@@ -12,11 +12,17 @@ dev = [
     "scaffold-guard>=0.1.0",
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.6.0",
+{% if use_mypy %}
     "mypy>=1.17.0",
+{% endif %}
     "pytest>=8.4.0",
     "pytest-cov>=6.2.0",
+{% if use_pyright %}
     "pyright>=1.1.400",
+{% endif %}
+{% if use_ruff %}
     "ruff>=0.12.0",
+{% endif %}
 ]
 
 [build-system]
@@ -26,6 +32,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/{{ package_name }}"]
 
+{% if use_ruff %}
 [tool.ruff]
 target-version = "py313"
 line-length = 100
@@ -69,13 +76,16 @@ max-statements = 60
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
+{% endif %}
 
+{% if use_mypy %}
 [tool.mypy]
 python_version = "3.13"
 strict = true
 warn_unreachable = true
 pretty = true
 show_error_codes = true
+{% endif %}
 
 [tool.pytest.ini_options]
 minversion = "8.4"
