@@ -137,6 +137,34 @@ def test_doctor_omits_disabled_adapter_and_ci_checks(
     assert "claude-adapter" not in check_ids
     assert "cursor-adapter" not in check_ids
     assert "github-actions" not in check_ids
+    assert "gitlab-ci" not in check_ids
+
+
+def test_doctor_reports_gitlab_ci(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor reports GitLab CI when selected."""
+    project_dir = generated_project(tmp_path, ci="gitlab")
+
+    def fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    async def fake_run_git(git_path: str, root: Path) -> bool:
+        assert git_path == "/usr/bin/git"
+        assert root == project_dir
+        return True
+
+    monkeypatch.setattr("scaffold_guard.doctor.shutil.which", fake_which)
+    monkeypatch.setattr(doctor, "_run_git", fake_run_git)
+
+    report = run_doctor(project_dir)
+    checks = {check.id: check for check in report.checks}
+
+    assert report.ok
+    assert "github-actions" not in checks
+    assert checks["gitlab-ci"].ok
 
 
 def test_doctor_warns_when_git_is_unavailable(

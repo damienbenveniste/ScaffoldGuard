@@ -39,12 +39,42 @@ def test_generated_project_config_round_trips_agent_selection(
     assert options.agent == expected_choice
     assert options.target_dir == project_dir
     assert options.package_name == "demo"
+    assert options.ci == "github"
     assert options.ruff_enabled
     assert options.mypy_enabled
     assert options.pyright_enabled
     assert payload["name"] == "demo"
+    assert payload["ci"] == "github"
     assert payload["agents"] == expected_flags
+    assert payload["features"] == {
+        "docs": True,
+        "github_actions": True,
+        "gitlab_ci": False,
+    }
     assert payload["tools"] == {"ruff": True, "mypy": True, "pyright": True}
+
+
+def test_generated_project_config_round_trips_gitlab_ci(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Generated config exposes GitLab CI selections."""
+    project_dir = generated_project(tmp_path, ci="gitlab")
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+    payload = config.to_json()
+
+    assert config.ci == "gitlab"
+    assert options.ci == "gitlab"
+    assert not config.github_actions
+    assert config.gitlab_ci
+    assert payload["ci"] == "gitlab"
+    assert payload["features"] == {
+        "docs": True,
+        "github_actions": False,
+        "gitlab_ci": True,
+    }
 
 
 def test_generated_project_config_round_trips_tool_selection(
@@ -117,4 +147,11 @@ def test_generated_project_config_rejects_bad_profile_and_missing_coverage(
         encoding="utf-8",
     )
     with pytest.raises(ProjectConfigError, match="Missing required integer config value"):
+        load_generated_project_config(project_dir)
+
+    config_path.write_text(
+        original.replace('ci = "github"', 'ci = "circle"'),
+        encoding="utf-8",
+    )
+    with pytest.raises(ProjectConfigError, match="Unsupported generated project CI provider"):
         load_generated_project_config(project_dir)

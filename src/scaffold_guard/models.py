@@ -7,6 +7,7 @@ from typing import Literal, TypeAlias
 AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
 ProfileChoice: TypeAlias = Literal["minimal", "package"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
+CiChoice: TypeAlias = Literal["github", "gitlab"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +30,7 @@ class InitOptions:
     license: LicenseChoice
     python_min: str
     coverage: int
-    ci: str
+    ci: CiChoice
     docs_enabled: bool
     dry_run: bool
     force: bool

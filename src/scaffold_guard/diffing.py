@@ -228,7 +228,7 @@ def _classify_path(root: Path, path: Path) -> tuple[DiffArea, ...]:
         ("tests", _is_test_file),
         ("public docs", _is_docs_file),
         ("package configuration", _is_pyproject_file),
-        ("GitHub Actions workflow", _is_workflow_file),
+        ("CI workflow", _is_workflow_file),
         ("agent instructions", _is_agent_rule_file),
         ("examples", _is_example_file),
         ("license", _is_license_file),
@@ -311,8 +311,10 @@ def _is_pyproject_file(path: Path) -> bool:
 
 
 def _is_workflow_file(path: Path) -> bool:
-    """Return whether a path is a GitHub Actions workflow file."""
-    return path.parts[0:2] == (".github", "workflows") and path.suffix in {".yaml", ".yml"}
+    """Return whether a path is a CI workflow file."""
+    return (
+        path.parts[0:2] == (".github", "workflows") and path.suffix in {".yaml", ".yml"}
+    ) or path == Path(".gitlab-ci.yml")
 
 
 def _is_example_file(path: Path) -> bool:
@@ -419,7 +421,7 @@ def _apply_workflow_rules(
 ) -> None:
     """Add requirements caused by GitHub workflow changes."""
     if any(_is_workflow_file(path) for path in files):
-        validations.append("manual GitHub Actions workflow review")
+        validations.append("manual CI workflow review")
         evidence.append("workflow changes manually reviewed")
 
 

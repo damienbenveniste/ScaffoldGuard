@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scaffold_guard.models import AgentChoice, InitOptions
+from scaffold_guard.models import AgentChoice, CiChoice, InitOptions
 from scaffold_guard.renderer import TemplateRenderer
 from scaffold_guard.scaffold import (
     RenderedFile,
@@ -155,6 +155,22 @@ def test_package_template_specs_omit_pyright_config_when_disabled(tmp_path: Path
     destinations = {spec.destination for spec in package_template_specs(options)}
 
     assert "pyrightconfig.json" not in destinations
+
+
+def test_package_template_specs_include_selected_ci_provider(tmp_path: Path) -> None:
+    """CI provider selection controls generated workflow files."""
+    github_options = _init_options(tmp_path, agent="codex", ci="github")
+    gitlab_options = _init_options(tmp_path, agent="codex", ci="gitlab")
+
+    github_destinations = {spec.destination for spec in package_template_specs(github_options)}
+    gitlab_destinations = {spec.destination for spec in package_template_specs(gitlab_options)}
+
+    assert ".github/workflows/ci.yml" in github_destinations
+    assert ".github/workflows/docs.yml" in github_destinations
+    assert ".gitlab-ci.yml" not in github_destinations
+    assert ".gitlab-ci.yml" in gitlab_destinations
+    assert ".github/workflows/ci.yml" not in gitlab_destinations
+    assert ".github/workflows/docs.yml" not in gitlab_destinations
 
 
 def test_render_package_files_has_no_project_jinja_placeholders(tmp_path: Path) -> None:
@@ -328,6 +344,7 @@ def _init_options(
     tmp_path: Path,
     *,
     agent: AgentChoice,
+    ci: CiChoice = "github",
     dry_run: bool = False,
     force: bool = False,
     ruff: bool = True,
@@ -343,7 +360,7 @@ def _init_options(
         license_name="MIT",
         python_min="3.13",
         coverage=95,
-        ci="github",
+        ci=ci,
         dry_run=dry_run,
         force=force,
     )

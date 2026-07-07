@@ -1,9 +1,9 @@
 # ScaffoldGuard
 
 `scaffold-guard` creates strict starter repositories for coding-agent workflows.
-The default `minimal` profile adds agent guardrails, GitHub Actions CI, local
-policy checks, and agent instruction files without forcing a Python package
-layout. The `package` profile adds typed Python package defaults.
+The default `minimal` profile adds agent guardrails, GitHub Actions or GitLab
+CI, local policy checks, and agent instruction files without forcing a Python
+package layout. The `package` profile adds typed Python package defaults.
 
 ## What V1 Provides
 
@@ -33,7 +33,8 @@ project-name prompt blank to initialize the current empty folder, or enter a
 name to create a new project directory. Choose `package` when you want
 `src/`, tests, docs, and Python tooling. Package guided setup asks whether to
 enable Ruff, mypy, and Pyright; all three default to enabled. Pass `NAME` and
-flags for non-interactive use with defaults.
+flags for non-interactive use with defaults. Use `--ci gitlab` when the
+generated project should use GitLab CI instead of GitHub Actions.
 
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.

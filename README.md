@@ -1,10 +1,10 @@
 # ScaffoldGuard
 
 `scaffold-guard` generates strict starter repositories for teams using coding
-agents. It creates local validation commands, GitHub Actions workflows, and
-agent instructions for Codex, Claude Code, and Cursor. The default `minimal`
-profile adds guardrails only; the `package` profile adds a typed Python package
-layout.
+agents. It creates local validation commands, GitHub Actions workflows or
+GitLab CI pipelines, and agent instructions for Codex, Claude Code, and Cursor.
+The default `minimal` profile adds guardrails only; the `package` profile adds a
+typed Python package layout.
 
 The PyPI package is `scaffold-guard`; the installed command is
 `scaffold-guard`.
@@ -69,6 +69,12 @@ scaffold-guard init claude_demo --agent claude
 scaffold-guard init cursor_demo --agent cursor
 ```
 
+Choose GitLab CI instead of GitHub Actions when needed:
+
+```bash
+scaffold-guard init gitlab_demo --ci gitlab
+```
+
 Generate a full Python package scaffold when you want source, tests, docs, and
 package tooling. Guided setup lets you keep or disable Ruff, mypy, and Pyright;
 all three are enabled by default.
@@ -93,7 +99,7 @@ my_project/
   README.md
   LICENSE
   scaffold-guard.toml
-  .github/workflows/ci.yml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
 ```
 
 The `package` profile adds a Python package scaffold:
@@ -106,7 +112,7 @@ my_project/
   pyproject.toml
   pyrightconfig.json  # when Pyright is enabled
   scaffold-guard.toml
-  .github/workflows/
+  .github/workflows/  # or .gitlab-ci.yml
   docs/
   examples/
   src/my_project/
@@ -126,7 +132,7 @@ Adapter files are added according to `--agent`:
 ## Commands
 
 ```bash
-scaffold-guard init [NAME] [--guided] [--profile minimal|package] [--agent codex|claude|cursor|all]
+scaffold-guard init [NAME] [--guided] [--profile minimal|package] [--agent codex|claude|cursor|all] [--ci github|gitlab]
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]

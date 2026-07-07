@@ -53,10 +53,35 @@ def docs_enabled(root: Path) -> bool:
 
 
 def ci_enabled(root: Path) -> bool:
+    """Return whether generated CI is enabled for a project."""
+    return github_actions_enabled(root) or gitlab_ci_enabled(root)
+
+
+def github_actions_enabled(root: Path) -> bool:
     """Return whether generated GitHub Actions CI is enabled for a project."""
     config = load_scaffold_guard_toml(root)
     features = table_value(config, "features")
-    return bool_value(features, "github_actions", default=True)
+    return bool_value(features, "github_actions", default=ci_provider(root) == "github")
+
+
+def gitlab_ci_enabled(root: Path) -> bool:
+    """Return whether generated GitLab CI is enabled for a project."""
+    config = load_scaffold_guard_toml(root)
+    features = table_value(config, "features")
+    return bool_value(features, "gitlab_ci", default=ci_provider(root) == "gitlab")
+
+
+def ci_provider(root: Path) -> str:
+    """Return the configured CI provider, defaulting older configs to GitHub."""
+    config = load_scaffold_guard_toml(root)
+    project = table_value(config, "project")
+    features = table_value(config, "features")
+    provider = str_value(project, "ci")
+    if provider in {"github", "gitlab"}:
+        return provider
+    if bool_value(features, "gitlab_ci", default=False):
+        return "gitlab"
+    return "github"
 
 
 def project_profile(root: Path) -> str:
