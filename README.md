@@ -53,17 +53,12 @@ For non-interactive use, pass the options as flags:
 scaffold-guard init my_project --agent all
 ```
 
-If you already created and entered an empty project folder, start guided setup
-for the current directory:
+If you already created and entered an empty project folder, run the same guided
+setup command from that folder. Press Enter at the project-name prompt to use
+the current directory:
 
 ```bash
-scaffold-guard init .
-```
-
-For non-interactive current-directory setup, pass the options as flags:
-
-```bash
-scaffold-guard init . --agent codex
+scaffold-guard init
 ```
 
 Generate for one agent surface:
@@ -109,7 +104,7 @@ Adapter files are added according to `--agent`:
 ## Commands
 
 ```bash
-scaffold-guard init [NAME|.] [--guided] [--agent codex|claude|cursor|all]
+scaffold-guard init [NAME] [--guided] [--agent codex|claude|cursor|all]
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]

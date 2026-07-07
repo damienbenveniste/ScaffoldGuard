@@ -111,11 +111,18 @@ def _print_init_summary(summary: ScaffoldSummary, *, agent: AgentOption) -> None
 def _prompt_init_name(default: str | None) -> str:
     """Prompt for a project name and validate it before continuing."""
     while True:
-        name = str(
-            typer.prompt("Project name, or '.' for current directory", default=default)
-            if default
-            else typer.prompt("Project name, or '.' for current directory")
-        )
+        if default is None or default.strip() == ".":
+            name = str(
+                typer.prompt(
+                    "Project name (Enter for current directory)",
+                    default="",
+                    show_default=False,
+                )
+            )
+        else:
+            name = str(typer.prompt("Project name", default=default))
+        if name.strip() == "":
+            name = "."
         try:
             if name.strip() == ".":
                 normalize_project_name(Path.cwd().name)
@@ -329,8 +336,7 @@ def init_command(
     name: Annotated[
         str | None,
         typer.Argument(
-            help="Project directory name to create, or '.' to initialize the current directory. "
-            "Omit to use guided setup.",
+            help="Project directory name to create. Omit to use guided setup.",
             callback=_capture_explicit_init_options,
         ),
     ] = None,

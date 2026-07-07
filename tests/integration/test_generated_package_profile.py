@@ -237,7 +237,7 @@ def test_init_dot_without_explicit_options_runs_guided_setup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Bare `init .` starts guided setup in an existing empty current directory."""
+    """Bare `init .` remains a guided compatibility path for current-directory init."""
     project_dir = tmp_path / "guided-dot"
     project_dir.mkdir()
     monkeypatch.chdir(project_dir)
@@ -253,12 +253,31 @@ def test_init_dot_without_explicit_options_runs_guided_setup(
     assert "  cd guided-dot" not in result.output
 
 
+def test_init_guided_accepts_empty_name_for_current_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Guided setup treats an empty project name as the current directory."""
+    project_dir = tmp_path / "guided-current"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    result = CliRunner().invoke(app, ["init"], input="\ncodex\n\n\n\n\n\n")
+
+    assert result.exit_code == SUCCESS, result.output
+    assert (project_dir / "AGENTS.md").exists()
+    assert (project_dir / "src/guided_current/core.py").exists()
+    assert "Project name (Enter for current directory)" in result.output
+    assert "Created ScaffoldGuard Python project: guided-current" in result.output
+    assert "  cd guided-current" not in result.output
+
+
 def test_init_guided_accepts_dot_for_current_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Guided setup accepts dot as the current-directory target."""
-    project_dir = tmp_path / "guided-current"
+    """Guided setup keeps dot accepted as a current-directory alias."""
+    project_dir = tmp_path / "guided-dot-alias"
     project_dir.mkdir()
     monkeypatch.chdir(project_dir)
 
@@ -266,8 +285,8 @@ def test_init_guided_accepts_dot_for_current_directory(
 
     assert result.exit_code == SUCCESS, result.output
     assert (project_dir / "AGENTS.md").exists()
-    assert (project_dir / "src/guided_current/core.py").exists()
-    assert "Created ScaffoldGuard Python project: guided-current" in result.output
+    assert (project_dir / "src/guided_dot_alias/core.py").exists()
+    assert "Created ScaffoldGuard Python project: guided-dot-alias" in result.output
 
 
 def test_init_dry_run_creates_no_files(

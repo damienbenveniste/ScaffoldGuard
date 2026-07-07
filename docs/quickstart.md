@@ -29,17 +29,12 @@ For non-interactive use, pass the options as flags:
 scaffold-guard init my_project --agent all
 ```
 
-If you already created and entered an empty project folder, start guided setup
-for the current directory:
+If you already created and entered an empty project folder, run the same guided
+setup command from that folder. Press Enter at the project-name prompt to use
+the current directory:
 
 ```bash
-scaffold-guard init .
-```
-
-For non-interactive current-directory setup, pass the options as flags:
-
-```bash
-scaffold-guard init . --agent codex
+scaffold-guard init
 ```
 
 Use one adapter when you only need one agent surface:
