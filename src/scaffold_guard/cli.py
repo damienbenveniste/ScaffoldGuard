@@ -61,6 +61,12 @@ class CiOption(StrEnum):
 CHOICE_SEPARATOR = "/"
 COVERAGE_MIN = 1
 COVERAGE_MAX = 100
+PROFILE_DESCRIPTIONS = (
+    ("minimal", "guardrails only; no Python or TypeScript source scaffold"),
+    ("package", "Python package scaffold with src/, tests/, docs/, and uv"),
+    ("typescript", "TypeScript package scaffold with npm, Biome, and Vitest"),
+    ("monorepo", "Python + TypeScript workspaces under packages/"),
+)
 INIT_OPTION_PARAMETER_NAMES = (
     "agent",
     "profile",
@@ -214,6 +220,14 @@ def _prompt_enabled(label: str, *, default: bool) -> bool:
     return answer == "yes"
 
 
+def _print_profile_descriptions() -> None:
+    """Print short descriptions for guided profile choices."""
+    typer.echo("Project profiles:")
+    for profile_name, description in PROFILE_DESCRIPTIONS:
+        typer.echo(f"  - {profile_name}: {description}")
+    typer.echo()
+
+
 def _prompt_init_options(
     *,
     name: str | None,
@@ -235,6 +249,7 @@ def _prompt_init_options(
             default=agent.value,
         )
     )
+    _print_profile_descriptions()
     prompted_profile = ProfileOption(
         _prompt_choice(
             "Project profile",
@@ -406,7 +421,14 @@ def init_command(
     ] = AgentOption.ALL,
     profile: Annotated[
         ProfileOption,
-        typer.Option("--profile", help="Generated project profile."),
+        typer.Option(
+            "--profile",
+            help=(
+                "Generated project profile: minimal guardrails only, no source scaffold; "
+                "package Python package scaffold; typescript TypeScript package scaffold; "
+                "monorepo Python + TypeScript workspaces."
+            ),
+        ),
     ] = ProfileOption.MINIMAL,
     license_name: Annotated[
         LicenseOption,

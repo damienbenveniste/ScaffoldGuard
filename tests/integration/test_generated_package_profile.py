@@ -432,6 +432,10 @@ def test_init_without_name_runs_guided_setup(
     assert 'python_min = "3.14"' in config
     assert "coverage_fail_under = 90" in config
     assert "ScaffoldGuard guided setup" in result.output
+    assert "minimal: guardrails only; no Python or TypeScript source scaffold" in result.output
+    assert "package: Python package scaffold with src/, tests/, docs/, and uv" in result.output
+    assert "typescript: TypeScript package scaffold with npm, Biome, and Vitest" in result.output
+    assert "monorepo: Python + TypeScript workspaces under packages/" in result.output
     assert "Created ScaffoldGuard package project: guided-demo" in result.output
 
 
@@ -458,6 +462,19 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     assert "Choose one of: yes, no" in result.output
     assert "Test coverage floor must be an integer." in result.output
     assert "Test coverage floor must be between 1 and 100." in result.output
+
+
+def test_init_help_explains_profile_choices() -> None:
+    """The init help text makes profile names understandable."""
+    result = CliRunner().invoke(app, ["init", "--help"])
+
+    assert result.exit_code == SUCCESS, result.output
+    assert "minimal guardrails only, no" in result.output
+    assert "source scaffold; package" in result.output
+    assert "Python package scaffold" in result.output
+    assert "typescript TypeScript" in result.output
+    assert "monorepo" in result.output
+    assert "Python + TypeScript" in result.output
 
 
 def test_init_dot_with_explicit_options_generates_project_in_current_directory(

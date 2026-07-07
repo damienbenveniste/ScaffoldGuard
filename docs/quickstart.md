@@ -19,6 +19,15 @@ scaffold-guard check
 scaffold-guard validate --quick
 ```
 
+Profile choices:
+
+| Profile | Meaning |
+|---|---|
+| `minimal` | Guardrails only; no Python or TypeScript source scaffold |
+| `package` | Python package scaffold with `src/`, tests, docs, and `uv` |
+| `typescript` | TypeScript package scaffold with npm, Biome, and Vitest |
+| `monorepo` | Python + TypeScript workspaces under `packages/` |
+
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.
 

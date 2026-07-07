@@ -198,6 +198,15 @@ scaffold-guard doctor [--path .] [--json]
 scaffold-guard version
 ```
 
+Profile choices:
+
+| Profile | Meaning |
+|---|---|
+| `minimal` | Guardrails only; no Python or TypeScript source scaffold |
+| `package` | Python package scaffold with `src/`, tests, docs, and `uv` |
+| `typescript` | TypeScript package scaffold with npm, Biome, and Vitest |
+| `monorepo` | Python + TypeScript workspaces under `packages/` |
+
 `check` runs fast policy checks. `inspect-diff` explains validation obligations
 for changed files in a git repository. `validate` runs the generated project's
 configured validation gate. `compile-rules` regenerates managed agent
