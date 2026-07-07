@@ -17,6 +17,7 @@ from scaffold_guard.checks.files import (
 SCAN_PATHS = (
     Path("src"),
     Path("tests"),
+    Path("packages"),
     Path("docs"),
     Path("examples"),
     Path("AGENTS.md"),
@@ -56,6 +57,30 @@ LINE_PATTERNS = (
         "forbid_noqa",
     ),
     LinePattern(
+        "// @ts-ignore",
+        "no-ts-ignore",
+        "Do not use // @ts-ignore; fix the type flow.",
+        "forbid_type_ignore",
+    ),
+    LinePattern(
+        "// @ts-expect-error",
+        "no-ts-expect-error",
+        "Do not use // @ts-expect-error; fix the type flow.",
+        "forbid_type_ignore",
+    ),
+    LinePattern(
+        "eslint-disable",
+        "no-eslint-disable",
+        "Do not use broad lint suppressions; fix the lint issue.",
+        "forbid_noqa",
+    ),
+    LinePattern(
+        "biome-ignore",
+        "no-biome-ignore",
+        "Do not use broad lint suppressions; fix the lint issue.",
+        "forbid_noqa",
+    ),
+    LinePattern(
         "dict[str, Any]",
         "no-dict-str-any",
         "Do not use dict[str, Any]; model the shape explicitly.",
@@ -78,6 +103,7 @@ LINE_PATTERNS = (
     ),
 )
 TYPING_ANY_IMPORT = re.compile(r"from\s+typing\s+import\s+.*\bAny\b|import\s+typing\s+as\s+typing")
+TYPESCRIPT_ANY = re.compile(r"(?:^|[^\w])(?::\s*any\b|as\s+any\b)")
 PASSWORD_LITERAL = re.compile(r"password\s*=\s*[\"'][^\"']+[\"']", flags=re.IGNORECASE)
 SHELL_TRUE = re.compile(r"subprocess\.run\([^\n)]*shell\s*=\s*True")
 ABSOLUTE_WRITE = re.compile(r"(?:Path\([\"']/|open\([\"']/|write_text\([\"']/|write_bytes\([\"']/)")
@@ -123,6 +149,19 @@ def _scan_file(
                     line=line_number,
                     code="no-any-import",
                     message="Do not import Any from typing in project code.",
+                )
+            )
+        if (
+            "forbid_any" in policy
+            and path.suffix in {".ts", ".tsx"}
+            and TYPESCRIPT_ANY.search(line)
+        ):
+            findings.append(
+                finding(
+                    relative_path,
+                    line=line_number,
+                    code="no-typescript-any",
+                    message="Do not use TypeScript any; model or narrow the shape explicitly.",
                 )
             )
         if PASSWORD_LITERAL.search(line):

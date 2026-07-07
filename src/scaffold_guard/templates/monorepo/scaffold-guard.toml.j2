@@ -1,0 +1,73 @@
+[project]
+name = "{{ project_slug }}"
+package = "{{ package_name }}"
+profile = "monorepo"
+python_min = "{{ python_min }}"
+coverage_fail_under = {{ coverage }}
+ci = "{{ ci_provider }}"
+
+[agents]
+codex = {{ codex_enabled }}
+claude = {{ claude_enabled }}
+cursor = {{ cursor_enabled }}
+
+[features]
+docs = false
+github_actions = {{ github_actions_enabled }}
+gitlab_ci = {{ gitlab_ci_enabled }}
+mkdocs = false
+python = true
+typescript = true
+
+[tools]
+ruff = {{ ruff_enabled }}
+mypy = {{ mypy_enabled }}
+pyright = {{ pyright_enabled }}
+typescript = true
+biome = true
+vitest = true
+
+[policy]
+forbid_type_ignore = true
+forbid_pyright_ignore = {{ pyright_enabled }}
+forbid_noqa = true
+forbid_any = true
+forbid_dict_str_any = true
+forbid_shell_true = true
+require_tests_for_src_changes = true
+require_docs_for_public_api_changes = true
+require_lockfile_for_dependency_changes = true
+
+[validation]
+quick = [
+{% if use_ruff %}
+  "uv run ruff format --check packages/python",
+  "uv run ruff check packages/python",
+{% endif %}
+  "uv run pytest packages/python/tests/unit",
+  "npm run ts:format:check",
+  "npm run ts:lint",
+  "npm run ts:typecheck",
+  "npm run ts:test",
+  "scaffold-guard check"
+]
+full = [
+{% if use_ruff %}
+  "uv run ruff format --check packages/python",
+  "uv run ruff check packages/python",
+{% endif %}
+{% if use_mypy %}
+  "uv run mypy packages/python/src packages/python/tests packages/python/examples",
+{% endif %}
+{% if use_pyright %}
+  "uv run pyright",
+{% endif %}
+  "uv run pytest packages/python/tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}",
+  "npm run ts:format:check",
+  "npm run ts:lint",
+  "npm run ts:typecheck",
+  "npm run ts:test",
+  "npm run ts:build",
+  "npm run ts:coverage",
+  "scaffold-guard check"
+]

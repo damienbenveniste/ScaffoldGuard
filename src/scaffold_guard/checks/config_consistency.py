@@ -16,6 +16,7 @@ from scaffold_guard.checks.config import (
 
 REQUIRES_PYTHON = re.compile(r"requires-python\s*=\s*[\"']>=([^\"']+)[\"']")
 PYPROJECT_COVERAGE = re.compile(r"fail_under\s*=\s*(\d+)")
+VITEST_COVERAGE = re.compile(r"(?:branches|functions|lines|statements):\s*(\d+)")
 
 
 def check_config_consistency(root: Path) -> CheckResult:
@@ -44,6 +45,11 @@ def check_config_consistency(root: Path) -> CheckResult:
         findings.extend(_check_coverage(project, pyproject_text))
         findings.extend(_check_python_min(project, pyproject_text))
         findings.extend(_check_lockfile_mtime(root))
+    for relative_path in (Path("vitest.config.ts"), Path("packages/typescript/vitest.config.ts")):
+        vitest_path = root / relative_path
+        if vitest_path.exists():
+            vitest_text = vitest_path.read_text(encoding="utf-8", errors="replace")
+            findings.extend(_check_typescript_coverage(project, relative_path, vitest_text))
     return CheckResult(id="config-consistency", findings=tuple(findings))
 
 
@@ -120,6 +126,27 @@ def _check_python_min(project: object, pyproject_text: str) -> list[CheckFinding
             line=1,
             code="python-min-config-mismatch",
             message="python_min in scaffold-guard.toml must match pyproject.toml.",
+        )
+    ]
+
+
+def _check_typescript_coverage(
+    project: object,
+    relative_path: Path,
+    vitest_text: str,
+) -> list[CheckFinding]:
+    """Verify Vitest coverage thresholds match `scaffold-guard.toml`."""
+    project_table = _object_mapping(project)
+    configured_coverage = int_value(project_table, "coverage_fail_under")
+    vitest_values = {int(match.group(1)) for match in VITEST_COVERAGE.finditer(vitest_text)}
+    if configured_coverage is None or not vitest_values or vitest_values == {configured_coverage}:
+        return []
+    return [
+        finding(
+            relative_path,
+            line=1,
+            code="coverage-config-mismatch",
+            message="coverage_fail_under in scaffold-guard.toml must match Vitest thresholds.",
         )
     ]
 

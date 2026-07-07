@@ -25,21 +25,25 @@ Detects common risky agent outputs, including:
 - `# pyright: ignore` when Pyright policy is enabled;
 - `# noqa:` when Ruff policy is enabled;
 - `Any` imports and `dict[str, Any]`;
+- TypeScript `any`, `as any`, `// @ts-ignore`, `// @ts-expect-error`, and
+  broad lint suppressions in generated TypeScript source or tests;
 - suspicious secret literals;
 - `subprocess.run(..., shell=True)`;
 - committed `.env`, `.venv`, or runtime artifact directories.
 
 ### project-health
 
-Verifies the expected generated project structure exists, including
-`pyproject.toml`, `AGENTS.md`, source, tests, docs, CI, adapter-specific files,
-and `pyrightconfig.json` when Pyright is enabled.
+Verifies the expected generated project structure exists for the selected
+profile. Package projects require Python source, tests, docs, CI, and
+`pyrightconfig.json` when Pyright is enabled. TypeScript projects require
+`package.json`, TypeScript config, Biome config, source, tests, and CI.
+Monorepos require both `packages/python/` and `packages/typescript/`.
 
 ### generated-files
 
 Checks generated instruction and support files for unresolved template
-placeholders, valid Cursor frontmatter, README `uv` commands, and CI commands
-for the enabled toolchain.
+placeholders, valid Cursor frontmatter, README toolchain commands, and CI
+commands for the enabled profile and toolchain.
 
 ### config-consistency
 

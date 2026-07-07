@@ -27,7 +27,8 @@ def _missing_required_paths(root: Path) -> list[CheckFinding]:
         Path("AGENTS.md"),
         Path("scaffold-guard.toml"),
     ]
-    if project_profile(root) == "package":
+    profile = project_profile(root)
+    if profile == "package":
         required_paths.extend(
             [
                 Path("pyproject.toml"),
@@ -39,6 +40,32 @@ def _missing_required_paths(root: Path) -> list[CheckFinding]:
             required_paths.append(Path("pyrightconfig.json"))
         if docs_enabled(root):
             required_paths.append(Path("docs"))
+    if profile == "typescript":
+        required_paths.extend(
+            [
+                Path("package.json"),
+                Path("tsconfig.json"),
+                Path("tsconfig.build.json"),
+                Path("biome.json"),
+                Path("src"),
+                Path("tests"),
+            ]
+        )
+    if profile == "monorepo":
+        required_paths.extend(
+            [
+                Path("pyproject.toml"),
+                Path("package.json"),
+                Path("biome.json"),
+                Path("packages/python/src"),
+                Path("packages/python/tests"),
+                Path("packages/typescript/package.json"),
+                Path("packages/typescript/src"),
+                Path("packages/typescript/tests"),
+            ]
+        )
+        if tool_enabled(root, "pyright"):
+            required_paths.append(Path("pyrightconfig.json"))
     if github_actions_enabled(root):
         required_paths.append(Path(".github/workflows/ci.yml"))
     if gitlab_ci_enabled(root):

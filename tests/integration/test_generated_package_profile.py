@@ -51,6 +51,45 @@ BASE_MINIMAL_FILES = {
 BASE_MINIMAL_GITLAB_FILES = (BASE_MINIMAL_FILES - {Path(".github/workflows/ci.yml")}) | {
     Path(".gitlab-ci.yml")
 }
+BASE_TYPESCRIPT_FILES = {
+    Path("AGENTS.md"),
+    Path("README.md"),
+    Path("LICENSE"),
+    Path("package.json"),
+    Path("tsconfig.json"),
+    Path("tsconfig.build.json"),
+    Path("biome.json"),
+    Path("vitest.config.ts"),
+    Path(".gitignore"),
+    Path(".github/workflows/ci.yml"),
+    Path("src/index.ts"),
+    Path("tests/index.test.ts"),
+    Path("scaffold-guard.toml"),
+}
+BASE_MONOREPO_FILES = {
+    Path("AGENTS.md"),
+    Path("README.md"),
+    Path("LICENSE"),
+    Path("pyproject.toml"),
+    Path("pyrightconfig.json"),
+    Path("package.json"),
+    Path("biome.json"),
+    Path(".gitignore"),
+    Path(".github/workflows/ci.yml"),
+    Path("packages/python/examples/hello.py"),
+    Path("packages/python/src/demo/__init__.py"),
+    Path("packages/python/src/demo/core.py"),
+    Path("packages/python/src/demo/py.typed"),
+    Path("packages/python/tests/unit/test_core.py"),
+    Path("packages/python/tests/integration/test_import_package.py"),
+    Path("packages/typescript/package.json"),
+    Path("packages/typescript/tsconfig.json"),
+    Path("packages/typescript/tsconfig.build.json"),
+    Path("packages/typescript/vitest.config.ts"),
+    Path("packages/typescript/src/index.ts"),
+    Path("packages/typescript/tests/index.test.ts"),
+    Path("scaffold-guard.toml"),
+}
 
 
 class GreetingPackage(Protocol):
@@ -127,6 +166,89 @@ def test_init_can_generate_package_gitlab_ci_project(
     assert "uv run scaffold-guard check" in gitlab_ci
     assert "uv run mkdocs build --strict" in gitlab_ci
     assert "uv run pytest tests --cov=demo" in gitlab_ci
+
+
+def test_init_can_generate_typescript_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The TypeScript profile creates a strict npm-based package scaffold."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--profile", "typescript", "--agent", "codex"],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    assert _relative_files(project_dir) == BASE_TYPESCRIPT_FILES
+    assert not (project_dir / "pyproject.toml").exists()
+    assert not (project_dir / ".claude").exists()
+    assert not (project_dir / ".cursor").exists()
+    package_json = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert package_json["scripts"]["typecheck"] == "tsc --noEmit"
+    assert package_json["devDependencies"]["@biomejs/biome"].startswith("^2.")
+    assert config["project"]["profile"] == "typescript"
+    assert config["features"]["typescript"] is True
+    assert config["tools"]["biome"] is True
+    assert "npm install" in result.output
+    assert "uv sync --all-groups" not in result.output
+    _assert_no_unresolved_project_placeholders(project_dir)
+
+
+def test_check_passes_in_fresh_typescript_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh TypeScript project passes ScaffoldGuard policy checks."""
+    monkeypatch.chdir(tmp_path)
+    init_result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--profile", "typescript", "--agent", "all"],
+    )
+
+    assert init_result.exit_code == SUCCESS, init_result.output
+
+    check_result = CliRunner().invoke(app, ["check", "--path", "demo"])
+
+    assert check_result.exit_code == SUCCESS, check_result.output
+    files = _relative_files(tmp_path / "demo")
+    assert Path(".claude/rules/typescript.md") in files
+    assert Path(".cursor/rules/typescript.mdc") in files
+    assert Path(".claude/rules/python.md") not in files
+    assert Path(".cursor/rules/python.mdc") not in files
+
+
+def test_init_can_generate_python_typescript_monorepo_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The monorepo profile creates Python and TypeScript package workspaces."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--profile", "monorepo", "--agent", "codex"],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    assert _relative_files(project_dir) == BASE_MONOREPO_FILES
+    pyproject = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    package_json = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert 'packages = ["packages/python/src/demo"]' in pyproject
+    assert package_json["workspaces"] == ["packages/typescript"]
+    assert package_json["scripts"]["ts:typecheck"].startswith("tsc -p packages/typescript")
+    assert config["project"]["profile"] == "monorepo"
+    assert config["features"]["python"] is True
+    assert config["features"]["typescript"] is True
+    assert "uv sync --all-groups" in result.output
+    assert "npm install" in result.output
+    _assert_no_unresolved_project_placeholders(project_dir)
+    _assert_python_files_compile(project_dir)
 
 
 def test_init_package_can_disable_quality_tools(
@@ -267,10 +389,12 @@ def test_init_all_generates_all_adapter_files(
     assert Path("pyproject.toml") not in files
     assert Path("src/demo/core.py") not in files
     assert Path("CLAUDE.md") in files
-    assert Path(".claude/rules/python.md") in files
-    assert Path(".cursor/rules/python.mdc") in files
+    assert Path(".claude/rules/testing.md") in files
+    assert Path(".cursor/rules/testing.mdc") in files
+    assert Path(".claude/rules/python.md") not in files
+    assert Path(".cursor/rules/python.mdc") not in files
     assert "@AGENTS.md" in (project_dir / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "alwaysApply: false" in (project_dir / ".cursor/rules/python.mdc").read_text(
+    assert "alwaysApply: false" in (project_dir / ".cursor/rules/testing.mdc").read_text(
         encoding="utf-8"
     )
     assert "Claude Code: CLAUDE.md + .claude/rules/" in result.output
@@ -490,11 +614,7 @@ def _assert_no_unresolved_project_placeholders(project_dir: Path) -> None:
 
 def _assert_python_files_compile(project_dir: Path) -> None:
     """Compile generated Python files without importing test modules."""
-    for path in (project_dir / "src").rglob("*.py"):
-        py_compile.compile(str(path), doraise=True)
-    for path in (project_dir / "tests").rglob("*.py"):
-        py_compile.compile(str(path), doraise=True)
-    for path in (project_dir / "examples").rglob("*.py"):
+    for path in project_dir.rglob("*.py"):
         py_compile.compile(str(path), doraise=True)
 
 

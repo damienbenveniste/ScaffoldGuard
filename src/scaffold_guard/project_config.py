@@ -13,7 +13,7 @@ from scaffold_guard.checks.config import (
 )
 from scaffold_guard.models import AgentChoice, CiChoice, InitOptions, ProfileChoice
 
-SUPPORTED_PROFILES: tuple[ProfileChoice, ...] = ("minimal", "package")
+SUPPORTED_PROFILES: tuple[ProfileChoice, ...] = ("minimal", "package", "typescript", "monorepo")
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
 
@@ -41,6 +41,16 @@ class GeneratedProjectConfig:
     ruff: bool
     mypy: bool
     pyright: bool
+
+    @property
+    def python(self) -> bool:
+        """Return whether the generated project includes Python package code."""
+        return self.profile in {"package", "monorepo"}
+
+    @property
+    def typescript(self) -> bool:
+        """Return whether the generated project includes TypeScript package code."""
+        return self.profile in {"typescript", "monorepo"}
 
     @property
     def agent_choice(self) -> AgentChoice:
@@ -75,6 +85,13 @@ class GeneratedProjectConfig:
 
     def to_json(self) -> dict[str, object]:
         """Return JSON-serializable project config fields."""
+        tools: dict[str, object] = {
+            "ruff": self.ruff,
+            "mypy": self.mypy,
+            "pyright": self.pyright,
+        }
+        if self.typescript:
+            tools.update({"typescript": True, "biome": True, "vitest": True})
         return {
             "name": self.name,
             "package": self.package,
@@ -92,11 +109,7 @@ class GeneratedProjectConfig:
                 "github_actions": self.github_actions,
                 "gitlab_ci": self.gitlab_ci,
             },
-            "tools": {
-                "ruff": self.ruff,
-                "mypy": self.mypy,
-                "pyright": self.pyright,
-            },
+            "tools": tools,
         }
 
 
@@ -117,7 +130,7 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     name = _required_str(project, "name")
     package = _required_str(project, "package")
     profile = _required_profile(project, "profile")
-    tool_default = profile == "package"
+    tool_default = profile in {"package", "monorepo"}
     ci = _optional_ci(project, features)
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")

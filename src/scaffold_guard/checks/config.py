@@ -95,7 +95,12 @@ def tool_enabled(root: Path, name: str) -> bool:
     """Return whether a generated project has a named quality tool enabled."""
     config = load_scaffold_guard_toml(root)
     tools = table_value(config, "tools")
-    return bool_value(tools, name, default=project_profile(root) == "package")
+    profile = project_profile(root)
+    if name in {"ruff", "mypy", "pyright"}:
+        return bool_value(tools, name, default=profile in {"package", "monorepo"})
+    if name in {"typescript", "biome", "vitest"}:
+        return bool_value(tools, name, default=profile in {"typescript", "monorepo"})
+    return bool_value(tools, name, default=False)
 
 
 def policy_enabled(root: Path, name: str) -> bool:

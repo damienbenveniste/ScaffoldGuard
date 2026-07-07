@@ -1,0 +1,20 @@
+image: node:22
+
+stages:
+  - test
+
+test:
+  stage: test
+  before_script:
+    - npm install
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - uv tool install scaffold-guard
+  script:
+    - npm run format:check
+    - npm run lint
+    - npm run typecheck
+    - npm test
+    - npm run build
+    - npm run coverage
+    - scaffold-guard check

@@ -3,8 +3,9 @@
 `scaffold-guard` generates strict starter repositories for teams using coding
 agents. It creates local validation commands, GitHub Actions workflows or
 GitLab CI pipelines, and agent instructions for Codex, Claude Code, and Cursor.
-The default `minimal` profile adds guardrails only; the `package` profile adds a
-typed Python package layout.
+The default `minimal` profile adds guardrails only. The `package`,
+`typescript`, and `monorepo` profiles add Python, TypeScript, or mixed
+Python+TypeScript starter layouts.
 
 The PyPI package is `scaffold-guard`; the installed command is
 `scaffold-guard`.
@@ -86,6 +87,27 @@ uv sync --all-groups
 scaffold-guard validate --quick
 ```
 
+Generate a strict TypeScript package when you want npm scripts, TypeScript,
+Biome, and Vitest:
+
+```bash
+scaffold-guard init ts_demo --profile typescript
+cd ts_demo
+npm install
+scaffold-guard validate --quick
+```
+
+Generate a Python + TypeScript monorepo when you want both language workspaces
+managed from one repository:
+
+```bash
+scaffold-guard init app_demo --profile monorepo
+cd app_demo
+uv sync --all-groups
+npm install
+scaffold-guard validate --quick
+```
+
 Use `--dry-run` to preview files and `--force` to overwrite known generated
 files.
 
@@ -120,6 +142,41 @@ my_project/
   tests/integration/
 ```
 
+The `typescript` profile adds a strict TypeScript package scaffold:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  package.json
+  tsconfig.json
+  tsconfig.build.json
+  biome.json
+  vitest.config.ts
+  scaffold-guard.toml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
+  src/
+  tests/
+```
+
+The `monorepo` profile adds Python and TypeScript workspaces:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  pyproject.toml
+  package.json
+  biome.json
+  pyrightconfig.json  # when Pyright is enabled
+  scaffold-guard.toml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
+  packages/python/
+  packages/typescript/
+```
+
 Adapter files are added according to `--agent`:
 
 | Agent | Generated instruction files |
@@ -132,7 +189,7 @@ Adapter files are added according to `--agent`:
 ## Commands
 
 ```bash
-scaffold-guard init [NAME] [--guided] [--profile minimal|package] [--agent codex|claude|cursor|all] [--ci github|gitlab]
+scaffold-guard init [NAME] [--guided] [--profile minimal|package|typescript|monorepo] [--agent codex|claude|cursor|all] [--ci github|gitlab]
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]

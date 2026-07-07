@@ -1,0 +1,8 @@
+"""Import smoke tests for {{ package_name }}."""
+
+import {{ package_name }}
+
+
+def test_package_exports_greet() -> None:
+    """The generated package exposes its public greeting helper."""
+    assert {{ package_name }}.greet("Agent") == "Hello, Agent!"

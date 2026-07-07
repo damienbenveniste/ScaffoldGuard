@@ -11,6 +11,7 @@ from scaffold_guard.diffing import (
     inspect_diff,
     load_project_validation_settings,
 )
+from scaffold_guard.models import ProfileChoice
 from scaffold_guard.scaffold import build_init_options, scaffold_package_project
 
 
@@ -30,10 +31,10 @@ def test_source_change_requires_tests_validation_and_docs_evidence(tmp_path: Pat
     assert "uv run mypy src tests" in report.required_validation
     assert "uv run pyright" in report.required_validation
     assert "uv run pytest tests --cov=demo --cov-fail-under=95" in report.required_validation
-    assert "tests changed or added for behavior change" in report.required_evidence
+    assert "Python tests changed or added for behavior change" in report.required_evidence
     assert "docs or README updated because public source changed" in report.required_evidence
     assert any(area.label == "public API" for area in report.changed_areas)
-    assert "Source changed without a detected tests/ change." in report.warnings
+    assert "Python source changed without a detected Python tests/ change." in report.warnings
 
 
 def test_source_change_respects_disabled_quality_tools(tmp_path: Path) -> None:
@@ -58,6 +59,70 @@ def test_source_change_respects_disabled_quality_tools(tmp_path: Path) -> None:
     assert "uv run mypy src tests" not in report.required_validation
     assert "uv run pyright" not in report.required_validation
     assert "uv run pytest tests --cov=demo --cov-fail-under=95" in report.required_validation
+
+
+def test_typescript_source_change_requires_npm_validation(tmp_path: Path) -> None:
+    """TypeScript source changes require npm script validation and test evidence."""
+    root = _generated_project(tmp_path, profile="typescript")
+    changed_file = Path("src/index.ts")
+
+    report = classify_changed_files(
+        root,
+        changed_files=(changed_file,),
+        base="main",
+        settings=ProjectValidationSettings(
+            package_name="demo",
+            coverage=95,
+            profile="typescript",
+        ),
+    )
+
+    assert "npm run format:check" in report.required_validation
+    assert "npm run lint" in report.required_validation
+    assert "npm run typecheck" in report.required_validation
+    assert "npm test" in report.required_validation
+    assert "TypeScript tests changed or added for behavior change" in report.required_evidence
+    assert any(area.label == "TypeScript source" for area in report.changed_areas)
+    assert (
+        "TypeScript source changed without a detected TypeScript tests/ change." in report.warnings
+    )
+
+
+def test_monorepo_source_changes_require_language_scoped_validation(tmp_path: Path) -> None:
+    """Mixed monorepo diffs produce scoped Python and TypeScript validation hints."""
+    root = _generated_project(tmp_path, profile="monorepo")
+
+    report = classify_changed_files(
+        root,
+        changed_files=(
+            Path("packages/python/src/demo/core.py"),
+            Path("packages/typescript/src/index.ts"),
+            Path("packages/typescript/tests/index.test.ts"),
+        ),
+        base="main",
+        settings=ProjectValidationSettings(
+            package_name="demo",
+            coverage=95,
+            profile="monorepo",
+        ),
+    )
+
+    assert "uv run ruff format --check packages/python" in report.required_validation
+    assert (
+        "uv run mypy packages/python/src packages/python/tests packages/python/examples"
+        in report.required_validation
+    )
+    assert (
+        "uv run pytest packages/python/tests --cov=demo --cov-fail-under=95"
+        in report.required_validation
+    )
+    assert "npm run ts:format:check" in report.required_validation
+    assert "npm run ts:typecheck" in report.required_validation
+    assert "npm run ts:test" in report.required_validation
+    assert "Python source changed without a detected Python tests/ change." in report.warnings
+    assert "TypeScript source changed without a detected TypeScript tests/ change." not in (
+        report.warnings
+    )
 
 
 def test_init_file_change_requires_import_integration_test(tmp_path: Path) -> None:
@@ -105,6 +170,32 @@ def test_pyproject_change_warns_when_lockfile_exists_but_is_not_changed(tmp_path
 
     assert "uv lock or uv sync" in report.required_validation
     assert "pyproject.toml changed while uv.lock exists but is not in the diff." in report.warnings
+
+
+def test_package_json_change_warns_when_lockfile_exists_but_is_not_changed(tmp_path: Path) -> None:
+    """package.json changes warn when an existing package lock is absent from the diff."""
+    root = _generated_project(tmp_path, profile="typescript")
+    (root / "package-lock.json").write_text("{}\n", encoding="utf-8")
+
+    report = classify_changed_files(
+        root,
+        changed_files=(Path("package.json"),),
+        base="main",
+        settings=ProjectValidationSettings(
+            package_name="demo",
+            coverage=95,
+            profile="typescript",
+        ),
+    )
+
+    assert "npm install" in report.required_validation
+    assert (
+        "package-lock.json updated or dependency lock status explained" in report.required_evidence
+    )
+    assert (
+        "package.json changed while package-lock.json exists but is not in the diff."
+        in report.warnings
+    )
 
 
 def test_agent_rule_change_requires_scaffold_guard_check(tmp_path: Path) -> None:
@@ -181,13 +272,13 @@ def test_inspect_diff_rejects_missing_or_non_git_paths(tmp_path: Path) -> None:
         inspect_diff(tmp_path, base="main")
 
 
-def _generated_project(tmp_path: Path) -> Path:
+def _generated_project(tmp_path: Path, *, profile: ProfileChoice = "package") -> Path:
     """Create a standard generated project for diff classification tests."""
     options = build_init_options(
         "demo",
         base_dir=tmp_path,
         agent="all",
-        profile="package",
+        profile=profile,
         license_name="MIT",
         python_min="3.13",
         coverage=95,

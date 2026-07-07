@@ -16,6 +16,11 @@ from scaffold_guard.checks.config import (
 )
 
 PUBLIC_SYMBOL = re.compile(r"^(?:def|class)\s+([A-Za-z][A-Za-z0-9_]*)\b", flags=re.MULTILINE)
+PUBLIC_TYPESCRIPT_SYMBOL = re.compile(
+    r"^export\s+(?:async\s+)?(?:function|class|const|let|interface|type|enum)\s+"
+    r"([A-Za-z][A-Za-z0-9_]*)\b",
+    flags=re.MULTILINE,
+)
 GIT_NOT_FOUND = 127
 
 
@@ -85,6 +90,7 @@ class ProjectValidationSettings:
 
     package_name: str | None
     coverage: int | None
+    profile: str = "package"
     ruff: bool = True
     mypy: bool = True
     pyright: bool = True
@@ -159,7 +165,8 @@ def classify_changed_files(
     evidence: list[str] = []
     warnings: list[str] = []
 
-    tests_changed = any(_is_test_file(path) for path in files)
+    python_tests_changed = any(_is_python_test_file(path) for path in files)
+    typescript_tests_changed = any(_is_typescript_test_file(path) for path in files)
     docs_changed = any(_is_docs_file(path) for path in files)
 
     for path in files:
@@ -169,16 +176,23 @@ def classify_changed_files(
         root,
         files,
         settings,
-        tests_changed,
+        python_tests_changed,
+        typescript_tests_changed,
         docs_changed,
         validations,
         evidence,
         warnings,
     )
     _apply_import_surface_rules(files, validations, evidence)
-    _apply_tests_rules(tests_changed, validations)
+    _apply_tests_rules(
+        python_tests_changed=python_tests_changed,
+        typescript_tests_changed=typescript_tests_changed,
+        settings=settings,
+        validations=validations,
+    )
     _apply_docs_rules(docs_changed, validations)
     _apply_pyproject_rules(root, files, validations, evidence, warnings)
+    _apply_package_json_rules(root, files, validations, evidence, warnings)
     _apply_workflow_rules(files, validations, evidence)
     _apply_agent_rules(files, validations, evidence)
     _apply_example_rules(files, validations, evidence)
@@ -203,10 +217,12 @@ def load_project_validation_settings(root: Path) -> ProjectValidationSettings:
     config = load_scaffold_guard_toml(root)
     project = table_value(config, "project")
     tools = table_value(config, "tools")
-    tool_default = (str_value(project, "profile") or "package") == "package"
+    profile = str_value(project, "profile") or "package"
+    tool_default = profile in {"package", "monorepo"}
     return ProjectValidationSettings(
         package_name=str_value(project, "package"),
         coverage=int_value(project, "coverage_fail_under"),
+        profile=profile,
         ruff=bool_value(tools, "ruff", default=tool_default),
         mypy=bool_value(tools, "mypy", default=tool_default),
         pyright=bool_value(tools, "pyright", default=tool_default),
@@ -216,10 +232,15 @@ def load_project_validation_settings(root: Path) -> ProjectValidationSettings:
 def _classify_path(root: Path, path: Path) -> tuple[DiffArea, ...]:
     """Return user-facing changed area labels for a changed file."""
     areas: list[DiffArea] = []
-    if _is_source_file(path):
-        areas.append(DiffArea("package source", path))
-        if path.match("src/**/__init__.py"):
+    if _is_python_source_file(path):
+        areas.append(DiffArea("Python package source", path))
+        if _is_python_import_surface_file(path):
             areas.append(DiffArea("package import surface", path))
+        if _is_public_api_change(root, path):
+            areas.append(DiffArea("public API", path))
+        return tuple(areas)
+    if _is_typescript_source_file(path):
+        areas.append(DiffArea("TypeScript source", path))
         if _is_public_api_change(root, path):
             areas.append(DiffArea("public API", path))
         return tuple(areas)
@@ -228,6 +249,7 @@ def _classify_path(root: Path, path: Path) -> tuple[DiffArea, ...]:
         ("tests", _is_test_file),
         ("public docs", _is_docs_file),
         ("package configuration", _is_pyproject_file),
+        ("package configuration", _is_package_json_file),
         ("CI workflow", _is_workflow_file),
         ("agent instructions", _is_agent_rule_file),
         ("examples", _is_example_file),
@@ -282,13 +304,37 @@ def _add_changed_files(collected: dict[str, Path], stdout: str) -> None:
 
 
 def _is_source_file(path: Path) -> bool:
+    """Return whether a path is generated package source."""
+    return _is_python_source_file(path) or _is_typescript_source_file(path)
+
+
+def _is_python_source_file(path: Path) -> bool:
     """Return whether a path is Python package source."""
-    return path.match("src/**/*.py")
+    return path.match("src/**/*.py") or path.match("packages/python/src/**/*.py")
+
+
+def _is_typescript_source_file(path: Path) -> bool:
+    """Return whether a path is TypeScript package source."""
+    return (
+        _is_inside(path, ("src",)) or _is_inside(path, ("packages", "typescript", "src"))
+    ) and path.suffix in {".ts", ".tsx"}
 
 
 def _is_test_file(path: Path) -> bool:
+    """Return whether a path is a generated test file."""
+    return _is_python_test_file(path) or _is_typescript_test_file(path)
+
+
+def _is_python_test_file(path: Path) -> bool:
     """Return whether a path is a Python test file."""
-    return path.match("tests/**/*.py")
+    return path.match("tests/**/*.py") or path.match("packages/python/tests/**/*.py")
+
+
+def _is_typescript_test_file(path: Path) -> bool:
+    """Return whether a path is a TypeScript test file."""
+    return (
+        _is_inside(path, ("tests",)) or _is_inside(path, ("packages", "typescript", "tests"))
+    ) and path.suffix in {".ts", ".tsx"}
 
 
 def _is_docs_file(path: Path) -> bool:
@@ -310,6 +356,16 @@ def _is_pyproject_file(path: Path) -> bool:
     return path == Path("pyproject.toml")
 
 
+def _is_package_json_file(path: Path) -> bool:
+    """Return whether a path is a Node package configuration."""
+    return path == Path("package.json") or path.match("packages/typescript/package.json")
+
+
+def _is_inside(path: Path, prefix: tuple[str, ...]) -> bool:
+    """Return whether a relative path is inside the given path prefix."""
+    return path.parts[: len(prefix)] == prefix and len(path.parts) > len(prefix)
+
+
 def _is_workflow_file(path: Path) -> bool:
     """Return whether a path is a CI workflow file."""
     return (
@@ -319,7 +375,9 @@ def _is_workflow_file(path: Path) -> bool:
 
 def _is_example_file(path: Path) -> bool:
     """Return whether a path is a Python example file."""
-    return path.parts[0:1] == ("examples",) and path.suffix == ".py"
+    return (
+        path.parts[0:1] == ("examples",) or path.parts[0:3] == ("packages", "python", "examples")
+    ) and path.suffix == ".py"
 
 
 def _is_license_file(path: Path) -> bool:
@@ -334,45 +392,95 @@ def _is_gitignore_file(path: Path) -> bool:
 
 def _is_public_api_change(root: Path, path: Path) -> bool:
     """Heuristically detect whether a changed source file touches public API."""
-    if path.match("src/**/__init__.py"):
+    if _is_python_import_surface_file(path):
         return True
     full_path = root / path
     if not full_path.exists():
         return False
     content = full_path.read_text(encoding="utf-8", errors="replace")
+    if path.suffix in {".ts", ".tsx"}:
+        return any(
+            not match.group(1).startswith("_")
+            for match in PUBLIC_TYPESCRIPT_SYMBOL.finditer(content)
+        )
     return any(not match.group(1).startswith("_") for match in PUBLIC_SYMBOL.finditer(content))
+
+
+def _is_python_import_surface_file(path: Path) -> bool:
+    """Return whether a path is a Python package import surface."""
+    return path.match("src/**/__init__.py") or path.match("packages/python/src/**/__init__.py")
 
 
 def _apply_source_rules(
     root: Path,
     files: tuple[Path, ...],
     settings: ProjectValidationSettings,
-    tests_changed: bool,
+    python_tests_changed: bool,
+    typescript_tests_changed: bool,
     docs_changed: bool,
     validations: list[str],
     evidence: list[str],
     warnings: list[str],
 ) -> None:
     """Add requirements caused by source changes."""
-    if not any(_is_source_file(path) for path in files):
-        return
-    if settings.ruff:
-        _add_many(
+    python_source_changed = any(_is_python_source_file(path) for path in files)
+    typescript_source_changed = any(_is_typescript_source_file(path) for path in files)
+    if python_source_changed:
+        _apply_python_source_rules(
+            settings,
+            python_tests_changed,
             validations,
-            ("uv run ruff format --check .", "uv run ruff check ."),
+            evidence,
+            warnings,
         )
-    if settings.mypy:
-        validations.append("uv run mypy src tests")
-    if settings.pyright:
-        validations.append("uv run pyright")
-    validations.append(_pytest_command(settings))
-    evidence.append("tests changed or added for behavior change")
-    if not tests_changed:
-        warnings.append("Source changed without a detected tests/ change.")
-    if any(_is_public_api_change(root, path) for path in files if _is_source_file(path)):
+    if typescript_source_changed:
+        _apply_typescript_source_rules(
+            settings,
+            typescript_tests_changed,
+            validations,
+            evidence,
+            warnings,
+        )
+    if (python_source_changed or typescript_source_changed) and any(
+        _is_public_api_change(root, path) for path in files if _is_source_file(path)
+    ):
         evidence.append("docs or README updated because public source changed")
         if not docs_changed:
             warnings.append("Public source changed without a detected docs or README change.")
+
+
+def _apply_python_source_rules(
+    settings: ProjectValidationSettings,
+    tests_changed: bool,
+    validations: list[str],
+    evidence: list[str],
+    warnings: list[str],
+) -> None:
+    """Add requirements caused by Python source changes."""
+    if settings.ruff:
+        _add_many(validations, _ruff_commands(settings))
+    if settings.mypy:
+        validations.append(_mypy_command(settings))
+    if settings.pyright:
+        validations.append("uv run pyright")
+    validations.append(_pytest_command(settings))
+    evidence.append("Python tests changed or added for behavior change")
+    if not tests_changed:
+        warnings.append("Python source changed without a detected Python tests/ change.")
+
+
+def _apply_typescript_source_rules(
+    settings: ProjectValidationSettings,
+    tests_changed: bool,
+    validations: list[str],
+    evidence: list[str],
+    warnings: list[str],
+) -> None:
+    """Add requirements caused by TypeScript source changes."""
+    _add_many(validations, _typescript_commands(settings, include_build=False))
+    evidence.append("TypeScript tests changed or added for behavior change")
+    if not tests_changed:
+        warnings.append("TypeScript source changed without a detected TypeScript tests/ change.")
 
 
 def _apply_import_surface_rules(
@@ -381,15 +489,23 @@ def _apply_import_surface_rules(
     evidence: list[str],
 ) -> None:
     """Add requirements caused by package import surface changes."""
-    if any(path.match("src/**/__init__.py") for path in files):
-        validations.append("uv run pytest tests/integration")
+    if any(_is_python_import_surface_file(path) for path in files):
+        validations.append(_python_integration_command(files))
         evidence.append("import integration test run for package __init__ change")
 
 
-def _apply_tests_rules(tests_changed: bool, validations: list[str]) -> None:
+def _apply_tests_rules(
+    *,
+    python_tests_changed: bool,
+    typescript_tests_changed: bool,
+    settings: ProjectValidationSettings,
+    validations: list[str],
+) -> None:
     """Add requirements caused by test changes."""
-    if tests_changed:
-        validations.append("uv run pytest tests")
+    if python_tests_changed:
+        validations.append(_python_test_command(settings))
+    if typescript_tests_changed:
+        validations.append(_typescript_test_command(settings))
 
 
 def _apply_docs_rules(docs_changed: bool, validations: list[str]) -> None:
@@ -412,6 +528,24 @@ def _apply_pyproject_rules(
     evidence.append("lockfile updated or dependency lock status explained")
     if (root / "uv.lock").exists() and Path("uv.lock") not in files:
         warnings.append("pyproject.toml changed while uv.lock exists but is not in the diff.")
+
+
+def _apply_package_json_rules(
+    root: Path,
+    files: tuple[Path, ...],
+    validations: list[str],
+    evidence: list[str],
+    warnings: list[str],
+) -> None:
+    """Add requirements caused by Node package configuration changes."""
+    if not any(_is_package_json_file(path) for path in files):
+        return
+    validations.append("npm install")
+    evidence.append("package-lock.json updated or dependency lock status explained")
+    if (root / "package-lock.json").exists() and Path("package-lock.json") not in files:
+        warnings.append(
+            "package.json changed while package-lock.json exists but is not in the diff."
+        )
 
 
 def _apply_workflow_rules(
@@ -443,18 +577,75 @@ def _apply_example_rules(
 ) -> None:
     """Add requirements caused by example changes."""
     if any(_is_example_file(path) for path in files):
-        validations.append("uv run pytest tests/integration")
+        validations.append(_python_integration_command(files))
         evidence.append("example smoke test or integration coverage run")
+
+
+def _ruff_commands(settings: ProjectValidationSettings) -> tuple[str, str]:
+    """Return Ruff validation commands for the generated project profile."""
+    if settings.profile == "monorepo":
+        return (
+            "uv run ruff format --check packages/python",
+            "uv run ruff check packages/python",
+        )
+    return ("uv run ruff format --check .", "uv run ruff check .")
+
+
+def _mypy_command(settings: ProjectValidationSettings) -> str:
+    """Return the mypy validation command for the generated project profile."""
+    if settings.profile == "monorepo":
+        return "uv run mypy packages/python/src packages/python/tests packages/python/examples"
+    return "uv run mypy src tests"
 
 
 def _pytest_command(settings: ProjectValidationSettings) -> str:
     """Return the most specific pytest validation command available."""
+    test_path = "packages/python/tests" if settings.profile == "monorepo" else "tests"
     if settings.package_name and settings.coverage:
         return (
-            f"uv run pytest tests --cov={settings.package_name} "
+            f"uv run pytest {test_path} --cov={settings.package_name} "
             f"--cov-fail-under={settings.coverage}"
         )
+    return f"uv run pytest {test_path}"
+
+
+def _python_test_command(settings: ProjectValidationSettings) -> str:
+    """Return the Python test command for the generated project profile."""
+    if settings.profile == "monorepo":
+        return "uv run pytest packages/python/tests"
     return "uv run pytest tests"
+
+
+def _python_integration_command(files: tuple[Path, ...]) -> str:
+    """Return an integration-test command for package or monorepo paths."""
+    if any(path.parts[0:2] == ("packages", "python") for path in files):
+        return "uv run pytest packages/python/tests/integration"
+    return "uv run pytest tests/integration"
+
+
+def _typescript_commands(
+    settings: ProjectValidationSettings,
+    *,
+    include_build: bool,
+) -> tuple[str, ...]:
+    """Return TypeScript validation commands for the generated project profile."""
+    prefix = "ts:" if settings.profile == "monorepo" else ""
+    commands = [
+        f"npm run {prefix}format:check",
+        f"npm run {prefix}lint",
+        f"npm run {prefix}typecheck",
+        _typescript_test_command(settings),
+    ]
+    if include_build:
+        commands.append(f"npm run {prefix}build")
+    return tuple(commands)
+
+
+def _typescript_test_command(settings: ProjectValidationSettings) -> str:
+    """Return the TypeScript test command for the generated project profile."""
+    if settings.profile == "monorepo":
+        return "npm run ts:test"
+    return "npm test"
 
 
 def _add_many(target: list[str], values: Iterable[str]) -> None:

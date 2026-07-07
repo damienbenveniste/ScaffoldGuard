@@ -39,6 +39,8 @@ class ProfileOption(StrEnum):
 
     MINIMAL = "minimal"
     PACKAGE = "package"
+    TYPESCRIPT = "typescript"
+    MONOREPO = "monorepo"
 
 
 class LicenseOption(StrEnum):
@@ -111,12 +113,18 @@ def _print_init_summary(
         typer.echo("  - Claude Code: CLAUDE.md + .claude/rules/")
     if agent in {AgentOption.CURSOR, AgentOption.ALL}:
         typer.echo("  - Cursor: .cursor/rules/*.mdc + AGENTS.md")
-    if profile == ProfileOption.PACKAGE:
+    if profile in {ProfileOption.PACKAGE, ProfileOption.MONOREPO}:
         typer.echo()
         typer.echo("Python tooling:")
         typer.echo(f"  - Ruff: {'enabled' if ruff else 'disabled'}")
         typer.echo(f"  - mypy: {'enabled' if mypy else 'disabled'}")
         typer.echo(f"  - Pyright: {'enabled' if pyright else 'disabled'}")
+    if profile in {ProfileOption.TYPESCRIPT, ProfileOption.MONOREPO}:
+        typer.echo()
+        typer.echo("TypeScript tooling:")
+        typer.echo("  - TypeScript: enabled")
+        typer.echo("  - Biome: enabled")
+        typer.echo("  - Vitest: enabled")
     typer.echo()
     typer.echo("CI:")
     typer.echo(f"  - {ci.value}")
@@ -124,8 +132,10 @@ def _print_init_summary(
     typer.echo("Next:")
     if summary.target_dir.resolve(strict=False) != Path.cwd().resolve(strict=False):
         typer.echo(f"  cd {summary.target_dir.name}")
-    if profile == ProfileOption.PACKAGE:
+    if profile in {ProfileOption.PACKAGE, ProfileOption.MONOREPO}:
         typer.echo("  uv sync --all-groups")
+    if profile in {ProfileOption.TYPESCRIPT, ProfileOption.MONOREPO}:
+        typer.echo("  npm install")
     typer.echo("  scaffold-guard check")
     typer.echo("  scaffold-guard validate")
 
@@ -244,9 +254,15 @@ def _prompt_init_options(
     prompted_ruff = True
     prompted_mypy = True
     prompted_pyright = True
-    if prompted_profile == ProfileOption.PACKAGE:
+    if prompted_profile in {ProfileOption.PACKAGE, ProfileOption.MONOREPO}:
         prompted_python_min = _prompt_text("Minimum Python version", default=python_min)
+    if prompted_profile in {
+        ProfileOption.PACKAGE,
+        ProfileOption.TYPESCRIPT,
+        ProfileOption.MONOREPO,
+    }:
         prompted_coverage = _prompt_coverage(coverage)
+    if prompted_profile in {ProfileOption.PACKAGE, ProfileOption.MONOREPO}:
         prompted_ruff = _prompt_enabled("Use Ruff for formatting and linting", default=True)
         prompted_mypy = _prompt_enabled("Use mypy for type checking", default=True)
         prompted_pyright = _prompt_enabled("Use Pyright for type checking", default=True)

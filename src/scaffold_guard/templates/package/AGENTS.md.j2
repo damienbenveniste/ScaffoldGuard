@@ -54,8 +54,8 @@ These rules apply to every code, documentation, and configuration change in this
 Run focused checks while working. Before claiming completion, run:
 
 ```bash
-uv run scaffold-guard inspect-diff
-uv run scaffold-guard validate
+scaffold-guard inspect-diff
+scaffold-guard validate
 ```
 
 When debugging locally, the core commands are:
@@ -73,7 +73,7 @@ uv run pyright
 {% endif %}
 uv run pytest tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}
 uv run mkdocs build --strict
-uv run scaffold-guard check
+scaffold-guard check
 ```
 
 ## Git and Change Hygiene

@@ -1,0 +1,15 @@
+{
+  "include": ["packages/python/src", "packages/python/tests", "packages/python/examples"],
+  "exclude": ["**/__pycache__", ".venv", ".mypy_cache", ".pytest_cache", ".ruff_cache", "node_modules"],
+  "pythonVersion": "{{ python_min }}",
+  "typeCheckingMode": "strict",
+  "venvPath": ".",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["packages/python/src"]
+    }
+  ],
+  "reportMissingTypeStubs": "warning"
+}

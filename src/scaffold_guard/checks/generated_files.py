@@ -19,6 +19,27 @@ AGENT_FILE_PATHS = (
 )
 PACKAGE_BASE_CI_TOKENS = ("uv sync", "pytest", "mkdocs")
 MINIMAL_CI_TOKENS = ("uv tool install scaffold-guard", "scaffold-guard check")
+TYPESCRIPT_CI_TOKENS = (
+    "npm install",
+    "npm run format:check",
+    "npm run lint",
+    "npm run typecheck",
+    "npm test",
+    "npm run build",
+    "npm run coverage",
+    "scaffold-guard check",
+)
+MONOREPO_CI_TOKENS = (
+    "uv sync",
+    "pytest",
+    "npm install",
+    "npm run ts:format:check",
+    "npm run ts:lint",
+    "npm run ts:typecheck",
+    "npm run ts:test",
+    "npm run ts:build",
+    "npm run ts:coverage",
+)
 
 
 def check_generated_files(root: Path) -> CheckResult:
@@ -84,19 +105,22 @@ def _check_cursor_frontmatter(root: Path) -> list[CheckFinding]:
 
 
 def _check_readme_mentions_uv(root: Path) -> list[CheckFinding]:
-    """Verify generated README commands point users to uv."""
+    """Verify generated README commands point users to the configured toolchain."""
     readme_path = root / "README.md"
     if not readme_path.exists():
         return []
     content = readme_path.read_text(encoding="utf-8", errors="replace")
-    if "uv " in content:
+    profile = project_profile(root)
+    expected_tokens = _readme_tool_tokens(profile)
+    missing_tokens = tuple(token for token in expected_tokens if token not in content)
+    if not missing_tokens:
         return []
     return [
         finding(
             "README.md",
             line=1,
-            code="readme-missing-uv",
-            message="Generated README commands must mention uv.",
+            code="readme-missing-toolchain-command",
+            message=f"Generated README commands must mention {', '.join(missing_tokens)}.",
         )
     ]
 
@@ -106,9 +130,7 @@ def _check_ci_workflow(root: Path) -> list[CheckFinding]:
     workflow_paths = _ci_workflow_paths(root)
     if not workflow_paths:
         return []
-    expected_tokens = (
-        MINIMAL_CI_TOKENS if project_profile(root) == "minimal" else _package_ci_tokens(root)
-    )
+    expected_tokens = _ci_tokens(root)
     findings: list[CheckFinding] = []
     for relative_path in workflow_paths:
         workflow_path = root / relative_path
@@ -148,6 +170,36 @@ def _package_ci_tokens(root: Path) -> tuple[str, ...]:
     if tool_enabled(root, "pyright"):
         tokens.append("pyright")
     return tuple(tokens)
+
+
+def _ci_tokens(root: Path) -> tuple[str, ...]:
+    """Return required CI tokens for the configured project profile."""
+    profile = project_profile(root)
+    if profile == "minimal":
+        return MINIMAL_CI_TOKENS
+    if profile == "typescript":
+        return TYPESCRIPT_CI_TOKENS
+    if profile == "monorepo":
+        tokens: list[str] = list(MONOREPO_CI_TOKENS)
+        if tool_enabled(root, "ruff"):
+            tokens.append("ruff")
+        if tool_enabled(root, "mypy"):
+            tokens.append("mypy")
+        if tool_enabled(root, "pyright"):
+            tokens.append("pyright")
+        return tuple(tokens)
+    return _package_ci_tokens(root)
+
+
+def _readme_tool_tokens(profile: str) -> tuple[str, ...]:
+    """Return README command tokens required for the generated project profile."""
+    if profile == "typescript":
+        return ("npm ",)
+    if profile == "monorepo":
+        return ("uv ", "npm ")
+    if profile == "minimal":
+        return ("scaffold-guard ",)
+    return ("uv ",)
 
 
 def _frontmatter_lines(lines: list[str]) -> list[str]:

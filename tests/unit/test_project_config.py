@@ -128,6 +128,51 @@ def test_generated_project_config_loads_minimal_profile(
     assert not (project_dir / "src").exists()
 
 
+def test_generated_project_config_loads_typescript_profile(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Generated config exposes TypeScript-only profile capabilities."""
+    project_dir = generated_project(tmp_path, profile="typescript")
+
+    config = load_generated_project_config(project_dir)
+    payload = config.to_json()
+
+    assert config.profile == "typescript"
+    assert not config.python
+    assert config.typescript
+    assert not config.ruff
+    assert payload["tools"] == {
+        "ruff": False,
+        "mypy": False,
+        "pyright": False,
+        "typescript": True,
+        "biome": True,
+        "vitest": True,
+    }
+
+
+def test_generated_project_config_loads_monorepo_profile(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Generated config exposes Python and TypeScript monorepo capabilities."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+
+    assert config.profile == "monorepo"
+    assert config.python
+    assert config.typescript
+    assert config.ruff
+    assert config.mypy
+    assert config.pyright
+    assert options.profile == "monorepo"
+    assert options.python_enabled
+    assert options.typescript_enabled
+
+
 def test_generated_project_config_rejects_bad_profile_and_missing_coverage(
     tmp_path: Path,
     generated_project: Callable[..., Path],

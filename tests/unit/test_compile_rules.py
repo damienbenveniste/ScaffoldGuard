@@ -77,6 +77,20 @@ def test_compile_rules_can_plan_missing_selected_adapter_files(
     assert not (project_dir / "CLAUDE.md").exists()
 
 
+def test_compile_rules_selects_typescript_adapter_files(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """TypeScript projects regenerate TypeScript adapter rules without Python rules."""
+    project_dir = generated_project(tmp_path, profile="typescript")
+    selected_files = selected_agent_files(load_generated_project_config(project_dir))
+
+    assert Path(".claude/rules/typescript.md") in selected_files
+    assert Path(".cursor/rules/typescript.mdc") in selected_files
+    assert Path(".claude/rules/python.md") not in selected_files
+    assert Path(".cursor/rules/python.mdc") not in selected_files
+
+
 def test_compile_rules_marks_unmarked_rendered_files(
     tmp_path: Path,
     generated_project: Callable[..., Path],

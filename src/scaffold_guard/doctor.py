@@ -53,15 +53,23 @@ class DoctorReport:
 def run_doctor(path: Path) -> DoctorReport:
     """Run environment and generated-project diagnostics."""
     root = path.resolve(strict=False)
+    profile = project_profile(root)
     checks = [
         _python_version_check(),
-        _executable_check("uv"),
-        _executable_check("git"),
-        _project_root_check(root),
-        _pyproject_parse_check(root),
-        *_generated_project_checks(root),
-        _git_repository_check(root),
     ]
+    if profile in {"minimal", "package", "monorepo"}:
+        checks.append(_executable_check("uv"))
+    if profile in {"typescript", "monorepo"}:
+        checks.append(_executable_check("npm"))
+    checks.extend(
+        (
+            _executable_check("git"),
+            _project_root_check(root),
+            _pyproject_parse_check(root),
+            *_generated_project_checks(root),
+            _git_repository_check(root),
+        )
+    )
     return DoctorReport(path=root, checks=tuple(checks))
 
 
@@ -103,12 +111,13 @@ def _pyproject_parse_check(root: Path) -> DoctorCheck:
     """Report whether `pyproject.toml` is present and parseable."""
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
-        if project_profile(root) == "minimal":
+        profile = project_profile(root)
+        if profile in {"minimal", "typescript"}:
             return DoctorCheck(
                 id="pyproject",
                 ok=True,
                 severity="info",
-                message="pyproject.toml is not required for the minimal profile.",
+                message=f"pyproject.toml is not required for the {profile} profile.",
             )
         return DoctorCheck(
             id="pyproject",
@@ -163,6 +172,32 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
                 ok=(root / "src" / config.package).is_dir(),
                 severity="error",
                 message=f"Package import directory: src/{config.package}",
+            )
+        )
+    if config.profile == "typescript":
+        checks.append(
+            DoctorCheck(
+                id="typescript-source-directory",
+                ok=(root / "src").is_dir(),
+                severity="error",
+                message="TypeScript source directory: src",
+            )
+        )
+    if config.profile == "monorepo":
+        checks.extend(
+            (
+                DoctorCheck(
+                    id="python-package-directory",
+                    ok=(root / "packages/python/src" / config.package).is_dir(),
+                    severity="error",
+                    message=f"Python package directory: packages/python/src/{config.package}",
+                ),
+                DoctorCheck(
+                    id="typescript-package-directory",
+                    ok=(root / "packages/typescript/src").is_dir(),
+                    severity="error",
+                    message="TypeScript package directory: packages/typescript/src",
+                ),
             )
         )
     if config.claude:

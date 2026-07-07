@@ -15,11 +15,18 @@ that references `AGENTS.md` and adds Claude-specific notes. It also creates
 `CLAUDE.md` does not duplicate the full shared instructions. `AGENTS.md` remains
 the shared source of truth.
 
+Language-specific Claude rules follow the selected profile: Python rules are
+included for `package` and `monorepo`, and TypeScript rules are included for
+`typescript` and `monorepo`.
+
 ## Cursor
 
 Cursor support creates `.cursor/rules/*.mdc` files plus the shared `AGENTS.md`.
 Each `.mdc` file includes frontmatter with metadata such as `description`,
 `alwaysApply`, and `globs` where appropriate.
+
+Language-specific Cursor rules follow the selected profile in the same way as
+Claude rules.
 
 ## Why Checks Still Matter
 

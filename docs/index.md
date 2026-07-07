@@ -3,11 +3,13 @@
 `scaffold-guard` creates strict starter repositories for coding-agent workflows.
 The default `minimal` profile adds agent guardrails, GitHub Actions or GitLab
 CI, local policy checks, and agent instruction files without forcing a Python
-package layout. The `package` profile adds typed Python package defaults.
+package layout. The `package`, `typescript`, and `monorepo` profiles add typed
+Python, TypeScript, or mixed Python+TypeScript starter layouts.
 
 ## What V1 Provides
 
-- `scaffold-guard init` for minimal guardrails or package-style Python repositories.
+- `scaffold-guard init` for minimal guardrails, Python packages, TypeScript
+  packages, or Python+TypeScript monorepos.
 - `AGENTS.md` for Codex and shared cross-agent guidance.
 - `CLAUDE.md` plus `.claude/rules/*.md` when Claude Code is selected.
 - `.cursor/rules/*.mdc` when Cursor is selected.
@@ -30,11 +32,13 @@ scaffold-guard validate --quick
 
 The `init` command starts guided setup when `NAME` is omitted. Leave the
 project-name prompt blank to initialize the current empty folder, or enter a
-name to create a new project directory. Choose `package` when you want
-`src/`, tests, docs, and Python tooling. Package guided setup asks whether to
-enable Ruff, mypy, and Pyright; all three default to enabled. Pass `NAME` and
-flags for non-interactive use with defaults. Use `--ci gitlab` when the
-generated project should use GitLab CI instead of GitHub Actions.
+name to create a new project directory. Choose `package` when you want Python
+source, tests, docs, and Python tooling. Choose `typescript` for npm,
+TypeScript, Biome, and Vitest. Choose `monorepo` when one repository should
+contain Python and TypeScript workspaces. Package and monorepo guided setup asks
+whether to enable Ruff, mypy, and Pyright; all three default to enabled. Pass
+`NAME` and flags for non-interactive use with defaults. Use `--ci gitlab` when
+the generated project should use GitLab CI instead of GitHub Actions.
 
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.

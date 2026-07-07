@@ -17,7 +17,8 @@ configuration change in this repository.
   strict local tooling, GitHub Actions or GitLab CI, and policy checks that
   catch common agent mistakes. The default `minimal` profile should add
   guardrails only; `package` should be explicit when users want Python package
-  folders and tooling.
+  folders and tooling; `typescript` and `monorepo` should be explicit when
+  users want TypeScript or mixed Python+TypeScript starter layouts.
 - Keep `scaffold-guard init` friendly for first-time users: omitting `NAME`
   starts guided setup, and leaving the project-name prompt blank initializes
   the current empty directory. Passing `NAME` and flags remains the stable
@@ -73,6 +74,24 @@ configuration change in this repository.
 - Do not lower lint, typing, docs, test, or coverage gates to force a green
   result.
 
+## Delegation, Subagents, and MCP
+
+- Use subagents early for non-trivial repo mapping, test-gap discovery,
+  documentation sweeps, and independent implementation review. Keep the main
+  thread focused on decisions, edits, validation, and integration.
+- Give subagents narrow read-only briefs unless they are explicitly assigned an
+  implementation slice. Ask them to return concrete file paths, risks, and
+  recommended tests rather than broad summaries.
+- Do not delegate interpretation of repository instructions, selected skills,
+  security-sensitive changes, release decisions, or final completion claims.
+  The main agent owns those.
+- When the task involves current library, framework, SDK, CLI, or cloud-service
+  behavior, use the available docs MCP first. Prefer Context7 for package and
+  framework docs, the GitHub app for repository/PR/CI state, and browser tools
+  for rendered documentation or Pages verification when available.
+- Close out subagent findings explicitly: either incorporate them in the change
+  or state why they were not needed.
+
 ## Python Tooling
 
 - Use `uv` for dependency management, lockfile updates, virtual environment work,
@@ -97,6 +116,18 @@ configuration change in this repository.
   selected tool set.
 - Write clear docstrings for public modules, classes, functions, and methods
   when the behavior is not obvious from the name and types.
+
+## TypeScript Tooling
+
+- Generated TypeScript projects should use npm scripts, TypeScript strict mode,
+  Biome for formatting and linting, and Vitest for tests and coverage.
+- Generated TypeScript-only projects should not include Python package tooling
+  or Python-specific adapter rules.
+- Generated monorepos should keep Python code under `packages/python/` and
+  TypeScript code under `packages/typescript/`, with validation scoped to the
+  relevant workspace when possible.
+- Do not introduce `any`, `as any`, `// @ts-ignore`, `// @ts-expect-error`, or
+  broad lint suppressions in generated TypeScript examples or templates.
 
 ## Types and Data Modeling
 
@@ -145,9 +176,9 @@ configuration change in this repository.
 - Unit tests should cover CLI argument handling, rendering, scaffold planning,
   filesystem safety, adapter selection, unsafe-pattern checks, diff
   requirements, generated-file checks, and config consistency.
-- Integration tests should cover generated minimal and package profiles, adapter
-  file sets, `compile-rules` idempotence, `validate --quick`, JSON modes, and
-  import smoke behavior.
+- Integration tests should cover generated minimal, package, TypeScript, and
+  monorepo profiles, adapter file sets, `compile-rules` idempotence,
+  `validate --quick`, JSON modes, and import smoke behavior where applicable.
 - Tests must verify behavior and regressions, not duplicate implementation
   details or mocked call order.
 - Name test files after the behavior or module under test. Do not use milestone,
@@ -214,9 +245,9 @@ uv run mkdocs build --strict
 Generated projects should be validated with their configured commands:
 
 ```bash
-uv run scaffold-guard check
-uv run scaffold-guard inspect-diff
-uv run scaffold-guard validate
+scaffold-guard check
+scaffold-guard inspect-diff
+scaffold-guard validate
 ```
 
 Do not report completion if a required check fails. Fix the failure or clearly

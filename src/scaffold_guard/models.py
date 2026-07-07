@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, TypeAlias
 
 AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
-ProfileChoice: TypeAlias = Literal["minimal", "package"]
+ProfileChoice: TypeAlias = Literal["minimal", "package", "typescript", "monorepo"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
 CiChoice: TypeAlias = Literal["github", "gitlab"]
 
@@ -37,6 +37,16 @@ class InitOptions:
     ruff_enabled: bool = True
     mypy_enabled: bool = True
     pyright_enabled: bool = True
+
+    @property
+    def python_enabled(self) -> bool:
+        """Return whether the generated profile includes Python package code."""
+        return self.profile in {"package", "monorepo"}
+
+    @property
+    def typescript_enabled(self) -> bool:
+        """Return whether the generated profile includes TypeScript package code."""
+        return self.profile in {"typescript", "monorepo"}
 
     @property
     def codex_enabled(self) -> bool:

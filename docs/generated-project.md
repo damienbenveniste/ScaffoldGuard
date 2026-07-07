@@ -43,13 +43,53 @@ CLAUDE.md
 .cursor/rules/*.mdc
 ```
 
+The `typescript` profile creates a strict TypeScript package with npm scripts,
+TypeScript, Biome, Vitest, CI, and language-aware agent instructions:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  package.json
+  tsconfig.json
+  tsconfig.build.json
+  biome.json
+  vitest.config.ts
+  scaffold-guard.toml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
+  src/index.ts
+  tests/index.test.ts
+```
+
+The `monorepo` profile creates one repository with Python and TypeScript
+workspaces:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  pyproject.toml
+  package.json
+  biome.json
+  pyrightconfig.json  # when Pyright is enabled
+  scaffold-guard.toml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
+  packages/python/src/my_project/
+  packages/python/tests/
+  packages/python/examples/
+  packages/typescript/src/
+  packages/typescript/tests/
+```
+
 ## Configuration
 
 `scaffold-guard.toml` stores the fields V1 commands need:
 
 - project name and import package;
 - selected agent adapters;
-- enabled package tools;
+- enabled Python and TypeScript tools;
 - docs and CI provider feature flags;
 - Python and test coverage settings;
 - fixed quick and full validation command descriptions.
@@ -71,6 +111,25 @@ commands only include Ruff, mypy, and Pyright when those tools are enabled:
 
 ```bash
 uv sync --all-groups
+scaffold-guard check
+scaffold-guard validate --quick
+scaffold-guard validate
+```
+
+TypeScript projects use npm scripts for TypeScript, Biome, and Vitest:
+
+```bash
+npm install
+scaffold-guard check
+scaffold-guard validate --quick
+scaffold-guard validate
+```
+
+Monorepo projects use both Python and TypeScript toolchains:
+
+```bash
+uv sync --all-groups
+npm install
 scaffold-guard check
 scaffold-guard validate --quick
 scaffold-guard validate

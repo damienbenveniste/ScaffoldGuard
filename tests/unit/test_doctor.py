@@ -214,3 +214,62 @@ def test_doctor_allows_minimal_profile_without_package_files(
     assert report.ok
     assert "package-import-directory" not in check_ids
     assert {check.id: check for check in report.checks}["pyproject"].ok
+
+
+def test_doctor_allows_typescript_profile_without_pyproject_or_uv(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TypeScript-only diagnostics require npm but do not require pyproject or uv."""
+    project_dir = generated_project(tmp_path, profile="typescript")
+
+    def fake_which(name: str) -> str:
+        assert name != "uv"
+        return f"/usr/bin/{name}"
+
+    async def fake_run_git(git_path: str, root: Path) -> bool:
+        assert git_path == "/usr/bin/git"
+        assert root == project_dir
+        return True
+
+    monkeypatch.setattr("scaffold_guard.doctor.shutil.which", fake_which)
+    monkeypatch.setattr(doctor, "_run_git", fake_run_git)
+
+    report = run_doctor(project_dir)
+    checks = {check.id: check for check in report.checks}
+
+    assert report.ok
+    assert checks["pyproject"].ok
+    assert checks["npm-available"].ok
+    assert "uv-available" not in checks
+    assert checks["typescript-source-directory"].ok
+
+
+def test_doctor_reports_monorepo_language_directories(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Monorepo diagnostics check both Python and TypeScript package directories."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+
+    def fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    async def fake_run_git(git_path: str, root: Path) -> bool:
+        assert git_path == "/usr/bin/git"
+        assert root == project_dir
+        return True
+
+    monkeypatch.setattr("scaffold_guard.doctor.shutil.which", fake_which)
+    monkeypatch.setattr(doctor, "_run_git", fake_run_git)
+
+    report = run_doctor(project_dir)
+    checks = {check.id: check for check in report.checks}
+
+    assert report.ok
+    assert checks["uv-available"].ok
+    assert checks["npm-available"].ok
+    assert checks["python-package-directory"].ok
+    assert checks["typescript-package-directory"].ok

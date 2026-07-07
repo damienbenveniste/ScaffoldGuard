@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scaffold_guard.models import AgentChoice, CiChoice, InitOptions
+from scaffold_guard.models import AgentChoice, CiChoice, InitOptions, ProfileChoice
 from scaffold_guard.renderer import TemplateRenderer
 from scaffold_guard.scaffold import (
     RenderedFile,
@@ -146,6 +146,37 @@ def test_package_template_specs_include_selected_adapters(tmp_path: Path) -> Non
     assert "CLAUDE.md" in all_destinations
     assert ".claude/rules/python.md" in all_destinations
     assert ".cursor/rules/python.mdc" in all_destinations
+
+
+def test_typescript_template_specs_filter_python_adapter_rules(tmp_path: Path) -> None:
+    """TypeScript-only scaffolds generate TypeScript adapter rules without Python rules."""
+    options = _init_options(tmp_path, agent="all", profile="typescript")
+
+    destinations = {spec.destination for spec in package_template_specs(options)}
+
+    assert "package.json" in destinations
+    assert "tsconfig.json" in destinations
+    assert ".claude/rules/typescript.md" in destinations
+    assert ".cursor/rules/typescript.mdc" in destinations
+    assert ".claude/rules/python.md" not in destinations
+    assert ".cursor/rules/python.mdc" not in destinations
+    assert "pyproject.toml" not in destinations
+
+
+def test_monorepo_template_specs_include_python_and_typescript_rules(tmp_path: Path) -> None:
+    """Monorepo scaffolds include both Python and TypeScript adapter guidance."""
+    options = _init_options(tmp_path, agent="all", profile="monorepo")
+
+    destinations = {spec.destination for spec in package_template_specs(options)}
+
+    assert "pyproject.toml" in destinations
+    assert "package.json" in destinations
+    assert "packages/python/src/{package_name}/core.py" in destinations
+    assert "packages/typescript/src/index.ts" in destinations
+    assert ".claude/rules/python.md" in destinations
+    assert ".claude/rules/typescript.md" in destinations
+    assert ".cursor/rules/python.mdc" in destinations
+    assert ".cursor/rules/typescript.mdc" in destinations
 
 
 def test_package_template_specs_omit_pyright_config_when_disabled(tmp_path: Path) -> None:
@@ -347,6 +378,7 @@ def _init_options(
     ci: CiChoice = "github",
     dry_run: bool = False,
     force: bool = False,
+    profile: ProfileChoice = "package",
     ruff: bool = True,
     mypy: bool = True,
     pyright: bool = True,
@@ -356,7 +388,7 @@ def _init_options(
         "demo",
         base_dir=tmp_path,
         agent=agent,
-        profile="package",
+        profile=profile,
         license_name="MIT",
         python_min="3.13",
         coverage=95,

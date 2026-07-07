@@ -62,6 +62,65 @@ def test_validation_commands_for_minimal_profile_run_policy_check_only(
     assert validation_commands(config, quick=False) == (("scaffold-guard", "check"),)
 
 
+def test_validation_commands_for_typescript_profile_use_npm_scripts(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """TypeScript-only validation uses npm, Biome, TypeScript, and Vitest scripts."""
+    project_dir = generated_project(tmp_path, profile="typescript")
+    config = load_generated_project_config(project_dir)
+
+    assert validation_commands(config, quick=True) == (
+        ("npm", "run", "format:check"),
+        ("npm", "run", "lint"),
+        ("npm", "run", "typecheck"),
+        ("npm", "test"),
+        ("scaffold-guard", "check"),
+    )
+    assert validation_commands(config, quick=False) == (
+        ("npm", "run", "format:check"),
+        ("npm", "run", "lint"),
+        ("npm", "run", "typecheck"),
+        ("npm", "test"),
+        ("npm", "run", "build"),
+        ("npm", "run", "coverage"),
+        ("scaffold-guard", "check"),
+    )
+
+
+def test_validation_commands_for_monorepo_profile_cover_both_languages(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Monorepo validation combines scoped Python checks with TypeScript scripts."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+    config = load_generated_project_config(project_dir)
+
+    quick = validation_commands(config, quick=True)
+    full = validation_commands(config, quick=False)
+
+    assert quick == (
+        ("uv", "run", "ruff", "format", "--check", "packages/python"),
+        ("uv", "run", "ruff", "check", "packages/python"),
+        ("uv", "run", "pytest", "packages/python/tests/unit"),
+        ("npm", "run", "ts:format:check"),
+        ("npm", "run", "ts:lint"),
+        ("npm", "run", "ts:typecheck"),
+        ("npm", "run", "ts:test"),
+        ("scaffold-guard", "check"),
+    )
+    assert (
+        "uv",
+        "run",
+        "mypy",
+        "packages/python/src",
+        "packages/python/tests",
+        "packages/python/examples",
+    ) in full
+    assert ("npm", "run", "ts:build") in full
+    assert ("npm", "run", "ts:coverage") in full
+
+
 def test_validation_commands_respect_disabled_quality_tools(
     tmp_path: Path,
     generated_project: Callable[..., Path],

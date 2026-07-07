@@ -61,6 +61,27 @@ uv sync --all-groups
 scaffold-guard validate --quick
 ```
 
+Use the `typescript` profile when you want a strict TypeScript package with
+npm scripts, TypeScript, Biome, and Vitest:
+
+```bash
+scaffold-guard init ts_demo --profile typescript
+cd ts_demo
+npm install
+scaffold-guard validate --quick
+```
+
+Use the `monorepo` profile when Python and TypeScript should live in one
+repository:
+
+```bash
+scaffold-guard init app_demo --profile monorepo
+cd app_demo
+uv sync --all-groups
+npm install
+scaffold-guard validate --quick
+```
+
 ## Preview Or Refresh Files
 
 Preview a new project without writing files:

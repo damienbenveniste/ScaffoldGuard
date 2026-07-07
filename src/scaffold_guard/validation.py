@@ -81,6 +81,10 @@ def validation_commands(
     """Return fixed V1 validation commands for a generated project."""
     if config.profile == "minimal":
         return (("scaffold-guard", "check"),)
+    if config.profile == "typescript":
+        return _typescript_validation_commands(quick=quick)
+    if config.profile == "monorepo":
+        return _monorepo_validation_commands(config, quick=quick)
     commands: list[tuple[str, ...]] = []
     if config.ruff:
         commands.extend(
@@ -109,6 +113,80 @@ def validation_commands(
                 "--cov-report=term-missing",
                 f"--cov-fail-under={config.coverage_fail_under}",
             ),
+            ("scaffold-guard", "check"),
+        )
+    )
+    return tuple(commands)
+
+
+def _typescript_validation_commands(*, quick: bool) -> tuple[tuple[str, ...], ...]:
+    """Return validation commands for a TypeScript-only generated project."""
+    commands = [
+        ("npm", "run", "format:check"),
+        ("npm", "run", "lint"),
+        ("npm", "run", "typecheck"),
+        ("npm", "test"),
+    ]
+    if not quick:
+        commands.extend((("npm", "run", "build"), ("npm", "run", "coverage")))
+    commands.append(("scaffold-guard", "check"))
+    return tuple(commands)
+
+
+def _monorepo_validation_commands(
+    config: GeneratedProjectConfig, *, quick: bool
+) -> tuple[tuple[str, ...], ...]:
+    """Return validation commands for a Python + TypeScript generated monorepo."""
+    commands: list[tuple[str, ...]] = []
+    if config.ruff:
+        commands.extend(
+            (
+                ("uv", "run", "ruff", "format", "--check", "packages/python"),
+                ("uv", "run", "ruff", "check", "packages/python"),
+            )
+        )
+    if quick:
+        commands.extend(
+            (
+                ("uv", "run", "pytest", "packages/python/tests/unit"),
+                ("npm", "run", "ts:format:check"),
+                ("npm", "run", "ts:lint"),
+                ("npm", "run", "ts:typecheck"),
+                ("npm", "run", "ts:test"),
+                ("scaffold-guard", "check"),
+            )
+        )
+        return tuple(commands)
+    if config.mypy:
+        commands.append(
+            (
+                "uv",
+                "run",
+                "mypy",
+                "packages/python/src",
+                "packages/python/tests",
+                "packages/python/examples",
+            )
+        )
+    if config.pyright:
+        commands.append(("uv", "run", "pyright"))
+    commands.extend(
+        (
+            (
+                "uv",
+                "run",
+                "pytest",
+                "packages/python/tests",
+                f"--cov={config.package}",
+                "--cov-report=term-missing",
+                f"--cov-fail-under={config.coverage_fail_under}",
+            ),
+            ("npm", "run", "ts:format:check"),
+            ("npm", "run", "ts:lint"),
+            ("npm", "run", "ts:typecheck"),
+            ("npm", "run", "ts:test"),
+            ("npm", "run", "ts:build"),
+            ("npm", "run", "ts:coverage"),
             ("scaffold-guard", "check"),
         )
     )
