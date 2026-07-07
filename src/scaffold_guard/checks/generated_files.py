@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled
+from scaffold_guard.checks.config import ci_enabled, project_profile
 from scaffold_guard.checks.files import iter_text_files, read_lines, relative_to_root
 
 AGENT_FILE_PATHS = (
@@ -13,6 +13,7 @@ AGENT_FILE_PATHS = (
     Path(".cursor/rules"),
 )
 CI_TOKENS = ("uv sync", "ruff", "mypy", "pyright", "pytest", "mkdocs")
+MINIMAL_CI_TOKENS = ("uv tool install scaffold-guard", "scaffold-guard check")
 
 
 def check_generated_files(root: Path) -> CheckResult:
@@ -103,6 +104,7 @@ def _check_ci_workflow(root: Path) -> list[CheckFinding]:
     if not workflow_path.exists():
         return []
     content = workflow_path.read_text(encoding="utf-8", errors="replace").lower()
+    expected_tokens = MINIMAL_CI_TOKENS if project_profile(root) == "minimal" else CI_TOKENS
     return [
         finding(
             ".github/workflows/ci.yml",
@@ -110,7 +112,7 @@ def _check_ci_workflow(root: Path) -> list[CheckFinding]:
             code="ci-missing-tool",
             message=f"Generated CI must include {token}.",
         )
-        for token in CI_TOKENS
+        for token in expected_tokens
         if token not in content
     ]
 

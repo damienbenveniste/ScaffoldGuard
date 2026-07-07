@@ -6,7 +6,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from scaffold_guard.checks.config import load_toml
+from scaffold_guard.checks.config import load_toml, project_profile
 from scaffold_guard.project_config import ProjectConfigError, load_generated_project_config
 
 
@@ -103,6 +103,13 @@ def _pyproject_parse_check(root: Path) -> DoctorCheck:
     """Report whether `pyproject.toml` is present and parseable."""
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
+        if project_profile(root) == "minimal":
+            return DoctorCheck(
+                id="pyproject",
+                ok=True,
+                severity="info",
+                message="pyproject.toml is not required for the minimal profile.",
+            )
         return DoctorCheck(
             id="pyproject",
             ok=False,
@@ -143,18 +150,21 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
             message="scaffold-guard.toml parses.",
         ),
         DoctorCheck(
-            id="package-import-directory",
-            ok=(root / "src" / config.package).is_dir(),
-            severity="error",
-            message=f"Package import directory: src/{config.package}",
-        ),
-        DoctorCheck(
             id="agents-md",
             ok=(root / "AGENTS.md").exists(),
             severity="error",
             message="AGENTS.md present." if (root / "AGENTS.md").exists() else "AGENTS.md missing.",
         ),
     ]
+    if config.profile == "package":
+        checks.append(
+            DoctorCheck(
+                id="package-import-directory",
+                ok=(root / "src" / config.package).is_dir(),
+                severity="error",
+                message=f"Package import directory: src/{config.package}",
+            )
+        )
     if config.claude:
         checks.append(
             DoctorCheck(

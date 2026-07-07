@@ -1,0 +1,35 @@
+[project]
+name = "{{ project_slug }}"
+package = "{{ package_name }}"
+profile = "minimal"
+python_min = "{{ python_min }}"
+coverage_fail_under = {{ coverage }}
+
+[agents]
+codex = {{ codex_enabled }}
+claude = {{ claude_enabled }}
+cursor = {{ cursor_enabled }}
+
+[features]
+docs = false
+github_actions = {{ ci_enabled }}
+mkdocs = false
+
+[policy]
+forbid_type_ignore = true
+forbid_pyright_ignore = true
+forbid_noqa = true
+forbid_any = true
+forbid_dict_str_any = true
+forbid_shell_true = true
+require_tests_for_src_changes = false
+require_docs_for_public_api_changes = false
+require_lockfile_for_dependency_changes = false
+
+[validation]
+quick = [
+  "scaffold-guard check"
+]
+full = [
+  "scaffold-guard check"
+]

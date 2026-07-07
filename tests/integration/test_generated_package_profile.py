@@ -36,6 +36,14 @@ BASE_PACKAGE_FILES = {
     Path("tests/integration/test_import_package.py"),
     Path("scaffold-guard.toml"),
 }
+BASE_MINIMAL_FILES = {
+    Path("AGENTS.md"),
+    Path("README.md"),
+    Path("LICENSE"),
+    Path(".gitignore"),
+    Path(".github/workflows/ci.yml"),
+    Path("scaffold-guard.toml"),
+}
 
 
 class GreetingPackage(Protocol):
@@ -53,7 +61,7 @@ def test_init_codex_generates_valid_package_tree(
     """The codex adapter creates a base package tree with only AGENTS.md."""
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(app, ["init", "demo", "--agent", "codex"])
+    result = CliRunner().invoke(app, ["init", "demo", "--profile", "package", "--agent", "codex"])
 
     assert result.exit_code == SUCCESS, result.output
     project_dir = tmp_path / "demo"
@@ -61,7 +69,7 @@ def test_init_codex_generates_valid_package_tree(
     assert not (project_dir / "CLAUDE.md").exists()
     assert not (project_dir / ".claude").exists()
     assert not (project_dir / ".cursor").exists()
-    assert "Created ScaffoldGuard Python project: demo" in result.output
+    assert "Created ScaffoldGuard package project: demo" in result.output
     assert "Codex: AGENTS.md" in result.output
 
     _assert_no_unresolved_project_placeholders(project_dir)
@@ -86,6 +94,10 @@ def test_check_passes_in_fresh_generated_project(
     assert check_result.exit_code == SUCCESS, check_result.output
     assert "scaffold-guard check: ok" in check_result.output
     assert "- unsafe-patterns: ok" in check_result.output
+    assert _relative_files(tmp_path / "demo") >= BASE_MINIMAL_FILES
+    assert not (tmp_path / "demo/src").exists()
+    config = (tmp_path / "demo/scaffold-guard.toml").read_text(encoding="utf-8")
+    assert 'profile = "minimal"' in config
 
 
 def test_check_text_output_reports_failure_locations(
@@ -94,7 +106,10 @@ def test_check_text_output_reports_failure_locations(
 ) -> None:
     """Text mode lists findings with path and line number."""
     monkeypatch.chdir(tmp_path)
-    init_result = CliRunner().invoke(app, ["init", "demo", "--agent", "codex"])
+    init_result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--profile", "package", "--agent", "codex"],
+    )
     assert init_result.exit_code == SUCCESS, init_result.output
     core_path = tmp_path / "demo/src/demo/core.py"
     core_path.write_text(core_path.read_text(encoding="utf-8") + "\nvalue = 1  # type: ignore\n")
@@ -152,7 +167,9 @@ def test_init_all_generates_all_adapter_files(
     assert result.exit_code == SUCCESS, result.output
     project_dir = tmp_path / "demo"
     files = _relative_files(project_dir)
-    assert BASE_PACKAGE_FILES.issubset(files)
+    assert BASE_MINIMAL_FILES.issubset(files)
+    assert Path("pyproject.toml") not in files
+    assert Path("src/demo/core.py") not in files
     assert Path("CLAUDE.md") in files
     assert Path(".claude/rules/python.md") in files
     assert Path(".cursor/rules/python.mdc") in files
@@ -174,7 +191,7 @@ def test_init_without_name_runs_guided_setup(
     result = CliRunner().invoke(
         app,
         ["init"],
-        input="guided-demo\nclaude\n\nApache-2.0\n3.14\n90\n\n",
+        input="guided-demo\nclaude\npackage\nApache-2.0\n3.14\n90\n\n",
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -189,7 +206,7 @@ def test_init_without_name_runs_guided_setup(
     assert 'python_min = "3.14"' in config
     assert "coverage_fail_under = 90" in config
     assert "ScaffoldGuard guided setup" in result.output
-    assert "Created ScaffoldGuard Python project: guided-demo" in result.output
+    assert "Created ScaffoldGuard package project: guided-demo" in result.output
 
 
 def test_init_guided_recovers_from_invalid_prompt_answers(
@@ -226,10 +243,13 @@ def test_init_dot_with_explicit_options_generates_project_in_current_directory(
 
     assert result.exit_code == SUCCESS, result.output
     assert (project_dir / "AGENTS.md").exists()
-    assert (project_dir / "src/already_created/core.py").exists()
+    assert not (project_dir / "src").exists()
+    assert 'profile = "minimal"' in (project_dir / "scaffold-guard.toml").read_text(
+        encoding="utf-8"
+    )
     assert not (project_dir / "already-created").exists()
     assert "ScaffoldGuard guided setup" not in result.output
-    assert "Created ScaffoldGuard Python project: already-created" in result.output
+    assert "Created ScaffoldGuard minimal project: already-created" in result.output
     assert "  cd already-created" not in result.output
 
 
@@ -246,10 +266,10 @@ def test_init_dot_without_explicit_options_runs_guided_setup(
 
     assert result.exit_code == SUCCESS, result.output
     assert (project_dir / "AGENTS.md").exists()
-    assert (project_dir / "src/guided_dot/core.py").exists()
+    assert not (project_dir / "src").exists()
     assert not (project_dir / ".cursor").exists()
     assert "ScaffoldGuard guided setup" in result.output
-    assert "Created ScaffoldGuard Python project: guided-dot" in result.output
+    assert "Created ScaffoldGuard minimal project: guided-dot" in result.output
     assert "  cd guided-dot" not in result.output
 
 
@@ -266,9 +286,9 @@ def test_init_guided_accepts_empty_name_for_current_directory(
 
     assert result.exit_code == SUCCESS, result.output
     assert (project_dir / "AGENTS.md").exists()
-    assert (project_dir / "src/guided_current/core.py").exists()
+    assert not (project_dir / "src").exists()
     assert "Project name (Enter for current directory)" in result.output
-    assert "Created ScaffoldGuard Python project: guided-current" in result.output
+    assert "Created ScaffoldGuard minimal project: guided-current" in result.output
     assert "  cd guided-current" not in result.output
 
 
@@ -285,8 +305,8 @@ def test_init_guided_accepts_dot_for_current_directory(
 
     assert result.exit_code == SUCCESS, result.output
     assert (project_dir / "AGENTS.md").exists()
-    assert (project_dir / "src/guided_dot_alias/core.py").exists()
-    assert "Created ScaffoldGuard Python project: guided-dot-alias" in result.output
+    assert not (project_dir / "src").exists()
+    assert "Created ScaffoldGuard minimal project: guided-dot-alias" in result.output
 
 
 def test_init_dry_run_creates_no_files(
@@ -299,7 +319,7 @@ def test_init_dry_run_creates_no_files(
     result = CliRunner().invoke(app, ["init", "demo", "--agent", "codex", "--dry-run"])
 
     assert result.exit_code == SUCCESS, result.output
-    assert "Planned ScaffoldGuard Python project: demo" in result.output
+    assert "Planned ScaffoldGuard minimal project: demo" in result.output
     assert "AGENTS.md" in result.output
     assert not (tmp_path / "demo").exists()
 

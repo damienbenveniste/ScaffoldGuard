@@ -11,7 +11,9 @@ from scaffold_guard.checks.config import (
     str_value,
     table_value,
 )
-from scaffold_guard.models import AgentChoice, InitOptions
+from scaffold_guard.models import AgentChoice, InitOptions, ProfileChoice
+
+SUPPORTED_PROFILES: tuple[ProfileChoice, ...] = ("minimal", "package")
 
 
 class ProjectConfigError(ValueError):
@@ -25,7 +27,7 @@ class GeneratedProjectConfig:
     root: Path
     name: str
     package: str
-    profile: str
+    profile: ProfileChoice
     python_min: str
     coverage_fail_under: int
     codex: bool
@@ -52,7 +54,7 @@ class GeneratedProjectConfig:
             project_slug=self.name,
             package_name=self.package,
             agent=self.agent_choice,
-            profile="package",
+            profile=self.profile,
             license="MIT",
             python_min=self.python_min,
             coverage=self.coverage_fail_under,
@@ -97,13 +99,9 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
 
     name = _required_str(project, "name")
     package = _required_str(project, "package")
-    profile = _required_str(project, "profile")
+    profile = _required_profile(project, "profile")
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
-    if profile != "package":
-        msg = f"Unsupported generated project profile: {profile}"
-        raise ProjectConfigError(msg)
-
     return GeneratedProjectConfig(
         root=resolved_root,
         name=name,
@@ -126,6 +124,15 @@ def _required_str(table: Mapping[str, object], key: str) -> str:
         msg = f"Missing required string config value: {key}"
         raise ProjectConfigError(msg)
     return value
+
+
+def _required_profile(table: Mapping[str, object], key: str) -> ProfileChoice:
+    """Return a required supported profile field from a TOML table."""
+    value = _required_str(table, key)
+    if value in SUPPORTED_PROFILES:
+        return value
+    msg = f"Unsupported generated project profile: {value}"
+    raise ProjectConfigError(msg)
 
 
 def _required_int(table: Mapping[str, object], key: str) -> int:

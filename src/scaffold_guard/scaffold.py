@@ -19,6 +19,7 @@ from scaffold_guard.models import (
 from scaffold_guard.renderer import TemplateRenderer
 
 PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+SUPPORTED_PROFILES = {"minimal", "package"}
 
 PACKAGE_TEMPLATE_SPECS = (
     TemplateSpec("package/AGENTS.md.j2", "AGENTS.md"),
@@ -40,6 +41,14 @@ PACKAGE_TEMPLATE_SPECS = (
     ),
     TemplateSpec("package/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
     TemplateSpec("package/github/workflows/docs.yml.j2", ".github/workflows/docs.yml"),
+)
+MINIMAL_TEMPLATE_SPECS = (
+    TemplateSpec("minimal/AGENTS.md.j2", "AGENTS.md"),
+    TemplateSpec("minimal/README.md.j2", "README.md"),
+    TemplateSpec("package/LICENSE.j2", "LICENSE"),
+    TemplateSpec("minimal/gitignore.j2", ".gitignore"),
+    TemplateSpec("minimal/scaffold-guard.toml.j2", "scaffold-guard.toml"),
+    TemplateSpec("minimal/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
 
 
@@ -95,6 +104,9 @@ def build_init_options(
     else:
         project_slug, package_name = normalize_project_name(stripped_name)
         target_dir = base_dir / project_slug
+    if profile not in SUPPORTED_PROFILES:
+        msg = f"Unsupported project profile: {profile}"
+        raise ValueError(msg)
     if ci != "github":
         msg = f"Unsupported CI provider: {ci}"
         raise ValueError(msg)
@@ -108,7 +120,7 @@ def build_init_options(
         python_min=python_min,
         coverage=coverage,
         ci=ci,
-        docs_enabled=True,
+        docs_enabled=profile == "package",
         dry_run=dry_run,
         force=force,
     )
@@ -120,6 +132,7 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
     return {
         "project_slug": options.project_slug,
         "package_name": options.package_name,
+        "profile": options.profile,
         "license": options.license,
         "python_min": options.python_min,
         "coverage": options.coverage,
@@ -147,11 +160,14 @@ def render_file(
 
 
 def package_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
-    """Return base package templates plus selected adapter templates."""
+    """Return profile templates plus selected adapter templates."""
     adapter_specs = tuple(
         spec for adapter in adapters_for(options.agent) for spec in adapter.template_specs()
     )
-    return (*PACKAGE_TEMPLATE_SPECS, *adapter_specs)
+    profile_specs = (
+        MINIMAL_TEMPLATE_SPECS if options.profile == "minimal" else PACKAGE_TEMPLATE_SPECS
+    )
+    return (*profile_specs, *adapter_specs)
 
 
 def render_package_files(
@@ -159,7 +175,7 @@ def render_package_files(
     *,
     renderer: TemplateRenderer | None = None,
 ) -> tuple[RenderedFile, ...]:
-    """Render all files for a package-profile project."""
+    """Render all files for a generated project profile."""
     active_renderer = renderer or TemplateRenderer()
     context = build_render_context(options)
     return tuple(
@@ -178,7 +194,7 @@ def scaffold_package_project(
     *,
     renderer: TemplateRenderer | None = None,
 ) -> ScaffoldSummary:
-    """Render and write, or dry-run, a generated package project."""
+    """Render and write, or dry-run, a generated project."""
     if options.target_dir.exists():
         if not options.target_dir.is_dir():
             msg = f"Target path is not a directory: {options.target_dir}"

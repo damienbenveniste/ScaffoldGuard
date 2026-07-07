@@ -1,16 +1,16 @@
 # V1 Implementation Plan: `scaffold-guard`
 
-**Purpose:** Implementation-ready plan for a coding agent to build V1 of a PyPI-installable Python starter CLI that creates **scaffold-guard Python repositories** with first-class **Codex**, **Claude Code**, and **Cursor** support.
+**Purpose:** Implementation-ready plan for a coding agent to build V1 of a PyPI-installable starter CLI that creates **scaffold-guard repositories** with first-class **Codex**, **Claude Code**, and **Cursor** support.
 
 **Working PyPI package name:** `scaffold-guard`
 **Working CLI command:** `scaffold-guard`
-**V1 user-facing promise:** “Generate a strict Python project that is ready for coding agents, with clear instructions, strict CI, and local policy checks that stop common agent mistakes.”
+**V1 user-facing promise:** “Generate a strict starter repository that is ready for coding agents, with clear instructions, strict CI, and local policy checks that stop common agent mistakes.”
 
 ---
 
 ## 0. Executive Summary
 
-Build a Python CLI package published to PyPI. Users can run it with `uvx` or install it normally. The CLI scaffolds a new Python project with:
+Build a Python CLI package published to PyPI. Users install it normally. The CLI scaffolds a new guarded repository with:
 
 - strict Python packaging defaults;
 - `uv`-based local workflow;
@@ -49,10 +49,11 @@ A Python developer who uses one or more coding agents:
 A user should be able to run:
 
 ```bash
-uvx scaffold-guard init my_project --agent codex
-uvx scaffold-guard init my_project --agent claude
-uvx scaffold-guard init my_project --agent cursor
-uvx scaffold-guard init my_project --agent all
+uv tool install scaffold-guard
+scaffold-guard init my_project --agent codex
+scaffold-guard init my_project --agent claude
+scaffold-guard init my_project --agent cursor
+scaffold-guard init my_project --agent all
 ```
 
 Then:
@@ -157,7 +158,21 @@ scaffold-guard version
 
 ### 3.2 Must generate
 
-For the default `package` profile, generate:
+For the default `minimal` profile, generate guardrails only:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  .gitignore
+  scaffold-guard.toml
+  .github/
+    workflows/
+      ci.yml
+```
+
+For the explicit `package` profile, also generate:
 
 ```text
 my_project/
@@ -351,7 +366,7 @@ Use minimal but productive dependencies:
 [project]
 name = "scaffold-guard"
 version = "0.1.0"
-description = "Generate guarded Python project starters for Codex, Claude Code, and Cursor."
+description = "Generate guarded starter repositories for Codex, Claude Code, and Cursor."
 requires-python = ">=3.11"
 dependencies = [
   "jinja2>=3.1.0",
@@ -399,7 +414,7 @@ Confirm this with a wheel build test.
 ```bash
 scaffold-guard init NAME \
   --agent codex|claude|cursor|all \
-  --profile package \
+  --profile minimal|package \
   --license MIT|Apache-2.0|none \
   --python-min 3.13 \
   --coverage 95 \
@@ -412,7 +427,7 @@ scaffold-guard init NAME \
 
 ```text
 --agent all
---profile package
+--profile minimal
 --license MIT
 --python-min 3.13
 --coverage 95
@@ -445,7 +460,7 @@ scaffold-guard init NAME \
 ### Example output
 
 ```text
-Created scaffold-guard Python project: my-project
+Created scaffold-guard project: my-project
 
 Agent adapters:
   ✓ Codex: AGENTS.md
@@ -1318,7 +1333,7 @@ from pathlib import Path
 from typing import Literal
 
 AgentChoice = Literal["codex", "claude", "cursor", "all"]
-ProfileChoice = Literal["package"]
+ProfileChoice = Literal["minimal", "package"]
 LicenseChoice = Literal["MIT", "Apache-2.0", "none"]
 
 
@@ -1571,7 +1586,7 @@ docs/releasing.md
 Must include:
 
 - what the tool does;
-- installation with `uvx`;
+- installation with `uv tool install scaffold-guard`;
 - examples for Codex, Claude, Cursor, all;
 - generated tree;
 - commands after generation;
@@ -1583,13 +1598,13 @@ Example:
 ```markdown
 # scaffold-guard
 
-Generate strict Python project starters for coding agents.
+Generate strict starter repositories for coding agents.
 
 ```bash
-uvx scaffold-guard init my_project --agent all
+uv tool install scaffold-guard
+scaffold-guard init my_project --agent all
 cd my_project
-uv sync --all-groups
-uv run scaffold-guard validate
+scaffold-guard validate
 ```
 ```
 
@@ -1663,7 +1678,7 @@ Add a note: Homebrew formula is planned after PyPI install is stable.
 
 ---
 
-## Milestone 2: Implement `init` for the `package` profile
+## Milestone 2: Implement `init` for the `minimal` and `package` profiles
 
 ### Tasks
 
@@ -1671,15 +1686,17 @@ Add a note: Homebrew formula is planned after PyPI install is stable.
 - [ ] Implement package name conversion.
 - [ ] Render base project files.
 - [ ] Render GitHub Actions.
-- [ ] Render docs and tests.
+- [ ] Render minimal guardrails by default.
+- [ ] Render package docs and tests when `--profile package` is selected.
 - [ ] Render `scaffold-guard.toml`.
 - [ ] Add CLI output summary.
 
 ### Acceptance criteria
 
-- `scaffold-guard init demo --agent codex` produces a valid package tree.
-- Generated source imports.
-- Generated tests are syntactically valid.
+- `scaffold-guard init demo --agent codex` produces a valid minimal tree.
+- `scaffold-guard init demo --profile package --agent codex` produces a valid package tree.
+- Package-profile generated source imports.
+- Package-profile generated tests are syntactically valid.
 - Generated files have no unresolved placeholders.
 
 ---

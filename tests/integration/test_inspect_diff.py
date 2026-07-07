@@ -126,7 +126,11 @@ def test_inspect_diff_non_git_path_exits_with_configuration_error(tmp_path: Path
 
 def _init_git_project(tmp_path: Path) -> Path:
     """Generate a project and commit its initial state."""
-    result = CliRunner().invoke(app, ["init", "demo"], catch_exceptions=False)
+    result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--profile", "package"],
+        catch_exceptions=False,
+    )
     assert result.exit_code == SUCCESS, result.output
     project_dir = tmp_path / "demo"
     _git(project_dir, "init")

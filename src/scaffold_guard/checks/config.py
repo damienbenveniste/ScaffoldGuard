@@ -57,3 +57,10 @@ def ci_enabled(root: Path) -> bool:
     config = load_scaffold_guard_toml(root)
     features = table_value(config, "features")
     return bool_value(features, "github_actions", default=True)
+
+
+def project_profile(root: Path) -> str:
+    """Return the generated project profile, defaulting to the original package profile."""
+    config = load_scaffold_guard_toml(root)
+    project = table_value(config, "project")
+    return str_value(project, "profile") or "package"

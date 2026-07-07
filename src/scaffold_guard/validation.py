@@ -79,6 +79,8 @@ def validation_commands(
     config: GeneratedProjectConfig, *, quick: bool
 ) -> tuple[tuple[str, ...], ...]:
     """Return fixed V1 validation commands for a generated project."""
+    if config.profile == "minimal":
+        return (("scaffold-guard", "check"),)
     if quick:
         return (
             ("uv", "run", "ruff", "format", "--check", "."),

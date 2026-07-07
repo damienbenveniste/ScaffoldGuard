@@ -36,6 +36,7 @@ class AgentOption(StrEnum):
 class ProfileOption(StrEnum):
     """Supported generated-project profiles."""
 
+    MINIMAL = "minimal"
     PACKAGE = "package"
 
 
@@ -73,7 +74,7 @@ EXPLICIT_INIT_OPTIONS_SELECTED: ContextVar[bool] = ContextVar(
 
 app = typer.Typer(
     add_completion=False,
-    help="Generate and inspect guarded Python starter repositories.",
+    help="Generate and inspect guarded starter repositories.",
     no_args_is_help=True,
 )
 
@@ -84,10 +85,15 @@ def _fail(message: str) -> NoReturn:
     raise typer.Exit(code=1)
 
 
-def _print_init_summary(summary: ScaffoldSummary, *, agent: AgentOption) -> None:
+def _print_init_summary(
+    summary: ScaffoldSummary,
+    *,
+    agent: AgentOption,
+    profile: ProfileOption,
+) -> None:
     """Print the user-facing summary after init planning or creation."""
     action = "Planned" if summary.dry_run else "Created"
-    typer.echo(f"{action} ScaffoldGuard Python project: {summary.target_dir.name}")
+    typer.echo(f"{action} ScaffoldGuard {profile.value} project: {summary.target_dir.name}")
     typer.echo()
     typer.echo("Files:")
     for file_path in summary.files:
@@ -103,7 +109,8 @@ def _print_init_summary(summary: ScaffoldSummary, *, agent: AgentOption) -> None
     typer.echo("Next:")
     if summary.target_dir.resolve(strict=False) != Path.cwd().resolve(strict=False):
         typer.echo(f"  cd {summary.target_dir.name}")
-    typer.echo("  uv sync --all-groups")
+    if profile == ProfileOption.PACKAGE:
+        typer.echo("  uv sync --all-groups")
     typer.echo("  scaffold-guard check")
     typer.echo("  scaffold-guard validate")
 
@@ -207,8 +214,11 @@ def _prompt_init_options(
             default=license_name.value,
         )
     )
-    prompted_python_min = _prompt_text("Minimum Python version", default=python_min)
-    prompted_coverage = _prompt_coverage(coverage)
+    prompted_python_min = python_min
+    prompted_coverage = coverage
+    if prompted_profile == ProfileOption.PACKAGE:
+        prompted_python_min = _prompt_text("Minimum Python version", default=python_min)
+        prompted_coverage = _prompt_coverage(coverage)
     prompted_ci = CiOption(
         _prompt_choice(
             "CI provider",
@@ -347,7 +357,7 @@ def init_command(
     profile: Annotated[
         ProfileOption,
         typer.Option("--profile", help="Generated project profile."),
-    ] = ProfileOption.PACKAGE,
+    ] = ProfileOption.MINIMAL,
     license_name: Annotated[
         LicenseOption,
         typer.Option("--license", help="Generated project license."),
@@ -371,7 +381,7 @@ def init_command(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show planned files only.")] = False,
     force: Annotated[bool, typer.Option("--force", help="Overwrite generated files.")] = False,
 ) -> None:
-    """Create a new ScaffoldGuard Python project."""
+    """Create a new ScaffoldGuard project."""
     if _should_prompt_init(name=name, guided=guided):
         name, agent, profile, license_name, python_min, coverage, ci = _prompt_init_options(
             name=name,
@@ -400,7 +410,7 @@ def init_command(
         summary = scaffold_package_project(options)
     except (FileExistsError, NotADirectoryError, ValueError) as exc:
         _fail(str(exc))
-    _print_init_summary(summary, agent=agent)
+    _print_init_summary(summary, agent=agent, profile=profile)
 
 
 @app.command("check")

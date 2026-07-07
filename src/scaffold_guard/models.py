@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, TypeAlias
 
 AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
-ProfileChoice: TypeAlias = Literal["package"]
+ProfileChoice: TypeAlias = Literal["minimal", "package"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
 
 

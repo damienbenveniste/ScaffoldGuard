@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled, docs_enabled
+from scaffold_guard.checks.config import ci_enabled, docs_enabled, project_profile
 
 
 def check_project_health(root: Path) -> CheckResult:
@@ -18,14 +18,20 @@ def check_project_health(root: Path) -> CheckResult:
 def _missing_required_paths(root: Path) -> list[CheckFinding]:
     """Return findings for missing required project paths."""
     required_paths = [
-        Path("pyproject.toml"),
-        Path("pyrightconfig.json"),
         Path("AGENTS.md"),
-        Path("src"),
-        Path("tests"),
+        Path("scaffold-guard.toml"),
     ]
-    if docs_enabled(root):
-        required_paths.append(Path("docs"))
+    if project_profile(root) == "package":
+        required_paths.extend(
+            [
+                Path("pyproject.toml"),
+                Path("pyrightconfig.json"),
+                Path("src"),
+                Path("tests"),
+            ]
+        )
+        if docs_enabled(root):
+            required_paths.append(Path("docs"))
     if ci_enabled(root):
         required_paths.append(Path(".github/workflows/ci.yml"))
 

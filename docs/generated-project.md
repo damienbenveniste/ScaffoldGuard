@@ -1,7 +1,19 @@
 # Generated Project
 
-The default `package` profile creates a typed Python package with docs,
-examples, tests, CI, and agent instructions.
+The default `minimal` profile creates guardrails without package folders:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  .gitignore
+  scaffold-guard.toml
+  .github/workflows/ci.yml
+```
+
+The `package` profile creates a typed Python package with docs, examples,
+tests, CI, and agent instructions.
 
 ```text
 my_project/
@@ -45,7 +57,14 @@ small and purpose-built for the starter repository.
 
 ## Validation
 
-Generated projects are expected to run:
+Minimal projects are expected to run:
+
+```bash
+scaffold-guard check
+scaffold-guard validate --quick
+```
+
+Package projects additionally use their generated Python toolchain:
 
 ```bash
 uv sync --all-groups

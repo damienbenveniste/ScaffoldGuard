@@ -1,9 +1,10 @@
 # ScaffoldGuard
 
-`scaffold-guard` generates strict Python starter repositories for teams using
-coding agents. It creates a typed package layout, local validation commands,
-GitHub Actions workflows, and agent instructions for Codex, Claude Code, and
-Cursor.
+`scaffold-guard` generates strict starter repositories for teams using coding
+agents. It creates local validation commands, GitHub Actions workflows, and
+agent instructions for Codex, Claude Code, and Cursor. The default `minimal`
+profile adds guardrails only; the `package` profile adds a typed Python package
+layout.
 
 The PyPI package is `scaffold-guard`; the installed command is
 `scaffold-guard`.
@@ -34,12 +35,11 @@ Please report security issues privately through
 ## Quickstart
 
 Start the guided setup and answer the prompts. This example assumes you enter
-`my_project` as the project name.
+`my_project` as the project name and keep the default `minimal` profile.
 
 ```bash
 scaffold-guard init
 cd my_project
-uv sync --all-groups
 scaffold-guard check
 scaffold-guard validate --quick
 ```
@@ -69,12 +69,33 @@ scaffold-guard init claude_demo --agent claude
 scaffold-guard init cursor_demo --agent cursor
 ```
 
+Generate a full Python package scaffold when you want source, tests, docs, and
+package tooling:
+
+```bash
+scaffold-guard init package_demo --profile package --agent all
+cd package_demo
+uv sync --all-groups
+scaffold-guard validate --quick
+```
+
 Use `--dry-run` to preview files and `--force` to overwrite known generated
 files.
 
 ## Generated Project
 
-The default `package` profile creates:
+The default `minimal` profile creates guardrails only:
+
+```text
+my_project/
+  AGENTS.md
+  README.md
+  LICENSE
+  scaffold-guard.toml
+  .github/workflows/ci.yml
+```
+
+The `package` profile adds a Python package scaffold:
 
 ```text
 my_project/
@@ -104,7 +125,7 @@ Adapter files are added according to `--agent`:
 ## Commands
 
 ```bash
-scaffold-guard init [NAME] [--guided] [--agent codex|claude|cursor|all]
+scaffold-guard init [NAME] [--guided] [--profile minimal|package] [--agent codex|claude|cursor|all]
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]
@@ -140,6 +161,6 @@ V1 is a developer CLI, not a SaaS product or policy server. It does not include
 telemetry, external AI calls, Codex or Claude hooks, a plugin system, Homebrew
 automation, or automatic upgrades for mature existing repositories.
 
-Homebrew distribution, hook starter templates, more project profiles, and richer
+Homebrew distribution, hook starter templates, more specialized project profiles, and richer
 policy configuration are intentionally deferred until after the PyPI package is
 stable.

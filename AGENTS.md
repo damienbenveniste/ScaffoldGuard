@@ -6,16 +6,18 @@ configuration change in this repository.
 ## Product Orientation
 
 - Build `scaffold-guard`: a PyPI-installable Python CLI that generates strict
-  Python starter repositories designed for safe coding-agent collaboration.
+  starter repositories designed for safe coding-agent collaboration.
 - Public user-facing docs should present `uv tool install scaffold-guard`
   followed by the installed `scaffold-guard` command. Do not advertise transient
   no-install execution paths, `uvx`, or `uv run scaffold-guard ...` in
   user-facing install or quickstart flows. Keep `uv run scaffold-guard ...` only
   for repo-local development, CI, or generated agent operating instructions when
   project-local dependency resolution is required.
-- Preserve the V1 promise: generate a Python project with clear agent
-  instructions, strict local tooling, GitHub Actions CI, and policy checks that
-  catch common agent mistakes.
+- Preserve the V1 promise: generate a repository with clear agent instructions,
+  strict local tooling, GitHub Actions CI, and policy checks that catch common
+  agent mistakes. The default `minimal` profile should add guardrails only;
+  `package` should be explicit when users want Python package folders and
+  tooling.
 - Keep `scaffold-guard init` friendly for first-time users: omitting `NAME`
   starts guided setup, and leaving the project-name prompt blank initializes
   the current empty directory. Passing `NAME` and flags remains the stable
@@ -139,9 +141,9 @@ configuration change in this repository.
 - Unit tests should cover CLI argument handling, rendering, scaffold planning,
   filesystem safety, adapter selection, unsafe-pattern checks, diff
   requirements, generated-file checks, and config consistency.
-- Integration tests should cover generated package profiles, adapter file sets,
-  `compile-rules` idempotence, `validate --quick`, JSON modes, and import smoke
-  behavior.
+- Integration tests should cover generated minimal and package profiles, adapter
+  file sets, `compile-rules` idempotence, `validate --quick`, JSON modes, and
+  import smoke behavior.
 - Tests must verify behavior and regressions, not duplicate implementation
   details or mocked call order.
 - For bug fixes, add a regression test that fails before the fix and passes

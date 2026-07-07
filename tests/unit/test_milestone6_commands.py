@@ -18,7 +18,7 @@ from scaffold_guard.compile_rules import (
     selected_agent_files,
 )
 from scaffold_guard.doctor import run_doctor
-from scaffold_guard.models import AgentChoice, InitOptions
+from scaffold_guard.models import AgentChoice, InitOptions, ProfileChoice
 from scaffold_guard.project_config import (
     GeneratedProjectConfig,
     ProjectConfigError,
@@ -73,6 +73,19 @@ def test_generated_project_config_rejects_missing_required_fields(tmp_path: Path
 
     with pytest.raises(ProjectConfigError, match="Missing required string config value"):
         load_generated_project_config(project_dir)
+
+
+def test_generated_project_config_loads_minimal_profile(tmp_path: Path) -> None:
+    """Generated config supports the guardrails-only minimal profile."""
+    project_dir = _generated_project(tmp_path, profile="minimal")
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+
+    assert config.profile == "minimal"
+    assert options.profile == "minimal"
+    assert not (project_dir / "pyproject.toml").exists()
+    assert not (project_dir / "src").exists()
 
 
 def test_generated_project_config_rejects_bad_profile_and_missing_coverage(
@@ -225,6 +238,15 @@ def test_validation_commands_are_fixed_for_quick_and_full_profiles(tmp_path: Pat
         "--cov-report=term-missing",
         "--cov-fail-under=95",
     ) in full
+
+
+def test_validation_commands_for_minimal_profile_run_policy_check_only(tmp_path: Path) -> None:
+    """Minimal projects do not require package toolchain validation commands."""
+    project_dir = _generated_project(tmp_path, profile="minimal")
+    config = load_generated_project_config(project_dir)
+
+    assert validation_commands(config, quick=True) == (("scaffold-guard", "check"),)
+    assert validation_commands(config, quick=False) == (("scaffold-guard", "check"),)
 
 
 def test_validate_quick_json_stops_on_first_failing_command(
@@ -556,13 +578,44 @@ def test_doctor_warns_when_git_is_unavailable(
     assert not checks["git-repository"].ok
 
 
-def _generated_project(tmp_path: Path, *, agent: AgentChoice = "all") -> Path:
+def test_doctor_allows_minimal_profile_without_package_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Minimal profile diagnostics do not require pyproject or package source."""
+
+    def fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    async def fake_run_git(git_path: str, root: Path) -> bool:
+        assert git_path == "/usr/bin/git"
+        assert root == project_dir
+        return True
+
+    project_dir = _generated_project(tmp_path, profile="minimal")
+    monkeypatch.setattr("scaffold_guard.doctor.shutil.which", fake_which)
+    monkeypatch.setattr(doctor, "_run_git", fake_run_git)
+
+    report = run_doctor(project_dir)
+    check_ids = {check.id for check in report.checks}
+
+    assert report.ok
+    assert "package-import-directory" not in check_ids
+    assert {check.id: check for check in report.checks}["pyproject"].ok
+
+
+def _generated_project(
+    tmp_path: Path,
+    *,
+    agent: AgentChoice = "all",
+    profile: ProfileChoice = "package",
+) -> Path:
     """Create a generated package project for Milestone 6 tests."""
     options = build_init_options(
         "demo",
         base_dir=tmp_path,
         agent=agent,
-        profile="package",
+        profile=profile,
         license_name="MIT",
         python_min="3.13",
         coverage=95,
