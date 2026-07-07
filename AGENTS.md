@@ -146,6 +146,8 @@ configuration change in this repository.
   import smoke behavior.
 - Tests must verify behavior and regressions, not duplicate implementation
   details or mocked call order.
+- Name test files after the behavior or module under test. Do not use milestone,
+  roadmap, or implementation-history names.
 - For bug fixes, add a regression test that fails before the fix and passes
   after it.
 - Keep tests deterministic: no real network calls, sleeps, wall-clock coupling,
