@@ -192,6 +192,15 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
                 message="GitHub Actions CI configured.",
             )
         )
+    if config.gitlab_ci:
+        checks.append(
+            DoctorCheck(
+                id="gitlab-ci",
+                ok=(root / ".gitlab-ci.yml").exists(),
+                severity="error",
+                message="GitLab CI configured.",
+            )
+        )
     return tuple(checks)
 
 

@@ -44,6 +44,12 @@ scaffold-guard init claude_demo --agent claude
 scaffold-guard init cursor_demo --agent cursor
 ```
 
+Use GitLab CI instead of GitHub Actions:
+
+```bash
+scaffold-guard init gitlab_demo --ci gitlab
+```
+
 Use the `package` profile when you want a full Python package layout. Guided
 setup lets you keep or disable Ruff, mypy, and Pyright; all three are enabled
 by default.

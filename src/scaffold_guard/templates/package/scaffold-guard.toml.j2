@@ -4,6 +4,7 @@ package = "{{ package_name }}"
 profile = "package"
 python_min = "{{ python_min }}"
 coverage_fail_under = {{ coverage }}
+ci = "{{ ci_provider }}"
 
 [agents]
 codex = {{ codex_enabled }}
@@ -12,7 +13,8 @@ cursor = {{ cursor_enabled }}
 
 [features]
 docs = {{ docs_enabled }}
-github_actions = {{ ci_enabled }}
+github_actions = {{ github_actions_enabled }}
+gitlab_ci = {{ gitlab_ci_enabled }}
 mkdocs = {{ docs_enabled }}
 
 [tools]

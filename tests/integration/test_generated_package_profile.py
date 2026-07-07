@@ -37,6 +37,9 @@ BASE_PACKAGE_FILES = {
     Path("tests/integration/test_import_package.py"),
     Path("scaffold-guard.toml"),
 }
+BASE_PACKAGE_GITLAB_FILES = (
+    BASE_PACKAGE_FILES - {Path(".github/workflows/ci.yml"), Path(".github/workflows/docs.yml")}
+) | {Path(".gitlab-ci.yml")}
 BASE_MINIMAL_FILES = {
     Path("AGENTS.md"),
     Path("README.md"),
@@ -44,6 +47,9 @@ BASE_MINIMAL_FILES = {
     Path(".gitignore"),
     Path(".github/workflows/ci.yml"),
     Path("scaffold-guard.toml"),
+}
+BASE_MINIMAL_GITLAB_FILES = (BASE_MINIMAL_FILES - {Path(".github/workflows/ci.yml")}) | {
+    Path(".gitlab-ci.yml")
 }
 
 
@@ -78,6 +84,49 @@ def test_init_codex_generates_valid_package_tree(
     with _import_from_project(project_dir):
         package = cast(GreetingPackage, importlib.import_module("demo"))
         assert package.greet("Codex") == "Hello, Codex!"
+
+
+def test_init_can_generate_minimal_gitlab_ci_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The minimal profile can generate GitLab CI instead of GitHub Actions."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(app, ["init", "demo", "--ci", "gitlab"])
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    assert _relative_files(project_dir) >= BASE_MINIMAL_GITLAB_FILES
+    assert not (project_dir / ".github").exists()
+    config = (project_dir / "scaffold-guard.toml").read_text(encoding="utf-8")
+    assert 'ci = "gitlab"' in config
+    assert "github_actions = false" in config
+    assert "gitlab_ci = true" in config
+    assert "CI:\n  - gitlab" in result.output
+
+
+def test_init_can_generate_package_gitlab_ci_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The package profile can generate GitLab CI instead of GitHub Actions."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--profile", "package", "--agent", "codex", "--ci", "gitlab"],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    assert _relative_files(project_dir) == BASE_PACKAGE_GITLAB_FILES
+    assert not (project_dir / ".github").exists()
+    gitlab_ci = (project_dir / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    assert "PYTHON_VERSION" in gitlab_ci
+    assert "uv run scaffold-guard check" in gitlab_ci
+    assert "uv run mkdocs build --strict" in gitlab_ci
+    assert "uv run pytest tests --cov=demo" in gitlab_ci
 
 
 def test_init_package_can_disable_quality_tools(

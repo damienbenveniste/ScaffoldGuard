@@ -14,10 +14,10 @@ configuration change in this repository.
   for repo-local development, CI, or generated agent operating instructions when
   project-local dependency resolution is required.
 - Preserve the V1 promise: generate a repository with clear agent instructions,
-  strict local tooling, GitHub Actions CI, and policy checks that catch common
-  agent mistakes. The default `minimal` profile should add guardrails only;
-  `package` should be explicit when users want Python package folders and
-  tooling.
+  strict local tooling, GitHub Actions or GitLab CI, and policy checks that
+  catch common agent mistakes. The default `minimal` profile should add
+  guardrails only; `package` should be explicit when users want Python package
+  folders and tooling.
 - Keep `scaffold-guard init` friendly for first-time users: omitting `NAME`
   starts guided setup, and leaving the project-name prompt blank initializes
   the current empty directory. Passing `NAME` and flags remains the stable

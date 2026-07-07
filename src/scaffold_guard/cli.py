@@ -53,6 +53,7 @@ class CiOption(StrEnum):
     """Supported generated-project CI providers."""
 
     GITHUB = "github"
+    GITLAB = "gitlab"
 
 
 CHOICE_SEPARATOR = "/"
@@ -91,6 +92,7 @@ def _print_init_summary(
     *,
     agent: AgentOption,
     profile: ProfileOption,
+    ci: CiOption,
     ruff: bool,
     mypy: bool,
     pyright: bool,
@@ -115,6 +117,9 @@ def _print_init_summary(
         typer.echo(f"  - Ruff: {'enabled' if ruff else 'disabled'}")
         typer.echo(f"  - mypy: {'enabled' if mypy else 'disabled'}")
         typer.echo(f"  - Pyright: {'enabled' if pyright else 'disabled'}")
+    typer.echo()
+    typer.echo("CI:")
+    typer.echo(f"  - {ci.value}")
     typer.echo()
     typer.echo("Next:")
     if summary.target_dir.resolve(strict=False) != Path.cwd().resolve(strict=False):
@@ -455,7 +460,13 @@ def init_command(
     except (FileExistsError, NotADirectoryError, ValueError) as exc:
         _fail(str(exc))
     _print_init_summary(
-        summary, agent=agent, profile=profile, ruff=ruff, mypy=mypy, pyright=pyright
+        summary,
+        agent=agent,
+        profile=profile,
+        ci=ci,
+        ruff=ruff,
+        mypy=mypy,
+        pyright=pyright,
     )
 
 

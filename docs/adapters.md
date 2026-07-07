@@ -24,6 +24,6 @@ Each `.mdc` file includes frontmatter with metadata such as `description`,
 ## Why Checks Still Matter
 
 Instruction files guide agents, but they do not enforce behavior. Generated
-projects use `scaffold-guard check`, strict local tooling, and GitHub Actions CI to
-catch risky patterns such as type suppressions, unresolved templates, missing
-adapter files, and mismatched configuration.
+projects use `scaffold-guard check`, strict local tooling, and the selected CI
+provider to catch risky patterns such as type suppressions, unresolved
+templates, missing adapter files, and mismatched configuration.

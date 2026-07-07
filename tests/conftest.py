@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scaffold_guard.models import AgentChoice, ProfileChoice
+from scaffold_guard.models import AgentChoice, CiChoice, ProfileChoice
 from scaffold_guard.scaffold import build_init_options, scaffold_package_project, with_quality_tools
 
 
@@ -18,6 +18,7 @@ def generated_project() -> Callable[..., Path]:
         *,
         agent: AgentChoice = "all",
         profile: ProfileChoice = "package",
+        ci: CiChoice = "github",
         ruff: bool = True,
         mypy: bool = True,
         pyright: bool = True,
@@ -30,7 +31,7 @@ def generated_project() -> Callable[..., Path]:
             license_name="MIT",
             python_min="3.13",
             coverage=95,
-            ci="github",
+            ci=ci,
             dry_run=False,
             force=False,
         )

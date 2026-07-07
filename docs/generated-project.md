@@ -9,7 +9,7 @@ my_project/
   LICENSE
   .gitignore
   scaffold-guard.toml
-  .github/workflows/ci.yml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
 ```
 
 The `package` profile creates a typed Python package with docs, examples,
@@ -24,8 +24,8 @@ my_project/
   pyproject.toml
   pyrightconfig.json  # when Pyright is enabled
   scaffold-guard.toml
-  .github/workflows/ci.yml
-  .github/workflows/docs.yml
+  .github/workflows/ci.yml  # or .gitlab-ci.yml
+  .github/workflows/docs.yml  # when GitHub Actions is selected
   docs/index.md
   examples/hello.py
   src/my_project/__init__.py
@@ -50,7 +50,7 @@ CLAUDE.md
 - project name and import package;
 - selected agent adapters;
 - enabled package tools;
-- docs and GitHub Actions feature flags;
+- docs and CI provider feature flags;
 - Python and coverage settings;
 - fixed quick and full validation command descriptions.
 

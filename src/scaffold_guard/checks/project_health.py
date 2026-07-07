@@ -3,7 +3,13 @@
 from pathlib import Path
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled, docs_enabled, project_profile, tool_enabled
+from scaffold_guard.checks.config import (
+    docs_enabled,
+    github_actions_enabled,
+    gitlab_ci_enabled,
+    project_profile,
+    tool_enabled,
+)
 
 
 def check_project_health(root: Path) -> CheckResult:
@@ -33,8 +39,10 @@ def _missing_required_paths(root: Path) -> list[CheckFinding]:
             required_paths.append(Path("pyrightconfig.json"))
         if docs_enabled(root):
             required_paths.append(Path("docs"))
-    if ci_enabled(root):
+    if github_actions_enabled(root):
         required_paths.append(Path(".github/workflows/ci.yml"))
+    if gitlab_ci_enabled(root):
+        required_paths.append(Path(".gitlab-ci.yml"))
 
     return [
         finding(

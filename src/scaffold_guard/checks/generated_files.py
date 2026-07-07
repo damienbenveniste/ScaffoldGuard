@@ -3,7 +3,12 @@
 from pathlib import Path
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled, project_profile, tool_enabled
+from scaffold_guard.checks.config import (
+    github_actions_enabled,
+    gitlab_ci_enabled,
+    project_profile,
+    tool_enabled,
+)
 from scaffold_guard.checks.files import iter_text_files, read_lines, relative_to_root
 
 AGENT_FILE_PATHS = (
@@ -98,25 +103,39 @@ def _check_readme_mentions_uv(root: Path) -> list[CheckFinding]:
 
 def _check_ci_workflow(root: Path) -> list[CheckFinding]:
     """Verify generated CI includes the V1 toolchain commands."""
-    if not ci_enabled(root):
+    workflow_paths = _ci_workflow_paths(root)
+    if not workflow_paths:
         return []
-    workflow_path = root / ".github/workflows/ci.yml"
-    if not workflow_path.exists():
-        return []
-    content = workflow_path.read_text(encoding="utf-8", errors="replace").lower()
     expected_tokens = (
         MINIMAL_CI_TOKENS if project_profile(root) == "minimal" else _package_ci_tokens(root)
     )
-    return [
-        finding(
-            ".github/workflows/ci.yml",
-            line=1,
-            code="ci-missing-tool",
-            message=f"Generated CI must include {token}.",
+    findings: list[CheckFinding] = []
+    for relative_path in workflow_paths:
+        workflow_path = root / relative_path
+        if not workflow_path.exists():
+            continue
+        content = workflow_path.read_text(encoding="utf-8", errors="replace").lower()
+        findings.extend(
+            finding(
+                relative_path,
+                line=1,
+                code="ci-missing-tool",
+                message=f"Generated CI must include {token}.",
+            )
+            for token in expected_tokens
+            if token not in content
         )
-        for token in expected_tokens
-        if token not in content
-    ]
+    return findings
+
+
+def _ci_workflow_paths(root: Path) -> tuple[Path, ...]:
+    """Return generated CI workflow paths selected by config."""
+    paths: list[Path] = []
+    if github_actions_enabled(root):
+        paths.append(Path(".github/workflows/ci.yml"))
+    if gitlab_ci_enabled(root):
+        paths.append(Path(".gitlab-ci.yml"))
+    return tuple(paths)
 
 
 def _package_ci_tokens(root: Path) -> tuple[str, ...]:

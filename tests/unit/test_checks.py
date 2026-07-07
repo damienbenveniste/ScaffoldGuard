@@ -7,13 +7,20 @@ import pytest
 
 from scaffold_guard.adapters.base import adapters_for
 from scaffold_guard.checks.base import CheckConfigurationError, CheckResult, finding
-from scaffold_guard.checks.config import ci_enabled, docs_enabled, table_value
+from scaffold_guard.checks.config import (
+    ci_enabled,
+    docs_enabled,
+    github_actions_enabled,
+    gitlab_ci_enabled,
+    table_value,
+)
 from scaffold_guard.checks.config_consistency import check_config_consistency
 from scaffold_guard.checks.files import gitignore_entries, iter_text_files
 from scaffold_guard.checks.generated_files import check_generated_files
 from scaffold_guard.checks.project_health import check_project_health
 from scaffold_guard.checks.runner import run_checks
 from scaffold_guard.checks.unsafe_patterns import check_unsafe_patterns
+from scaffold_guard.models import CiChoice
 from scaffold_guard.scaffold import build_init_options, scaffold_package_project
 
 
@@ -63,6 +70,8 @@ def test_config_helpers_default_when_config_missing(tmp_path: Path) -> None:
     """Missing optional generated config falls back to enabled features."""
     assert docs_enabled(tmp_path)
     assert ci_enabled(tmp_path)
+    assert github_actions_enabled(tmp_path)
+    assert not gitlab_ci_enabled(tmp_path)
     assert table_value({"project": "not-table"}, "project") == {}
 
 
@@ -218,6 +227,18 @@ def test_project_health_respects_disabled_docs_and_ci(tmp_path: Path) -> None:
     assert result.ok
 
 
+def test_project_health_requires_gitlab_ci_file_for_gitlab_projects(tmp_path: Path) -> None:
+    """GitLab CI projects require `.gitlab-ci.yml`, not GitHub workflow files."""
+    project_dir = _generated_project(tmp_path, ci="gitlab")
+    (project_dir / ".gitlab-ci.yml").unlink()
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(finding.path == ".gitlab-ci.yml" for finding in result.findings)
+    assert not any(finding.path == ".github/workflows/ci.yml" for finding in result.findings)
+
+
 def test_project_health_detects_claude_wrapper_without_agents_reference(tmp_path: Path) -> None:
     """CLAUDE.md must reference the shared AGENTS.md instructions."""
     project_dir = _generated_project(tmp_path)
@@ -310,6 +331,21 @@ def test_generated_files_respects_disabled_ci_tool_tokens(tmp_path: Path) -> Non
     assert result.ok
 
 
+def test_generated_files_checks_gitlab_ci_tokens(tmp_path: Path) -> None:
+    """Generated GitLab CI files are checked for the configured toolchain."""
+    project_dir = _generated_project(tmp_path, ci="gitlab")
+    (project_dir / ".gitlab-ci.yml").write_text(
+        "stages: [test]\nscript:\n  - uv sync\n",
+        encoding="utf-8",
+    )
+
+    result = check_generated_files(project_dir)
+
+    assert not result.ok
+    assert any(finding.path == ".gitlab-ci.yml" for finding in result.findings)
+    assert any(finding.code == "ci-missing-tool" for finding in result.findings)
+
+
 def test_generated_files_allows_missing_optional_generated_files(tmp_path: Path) -> None:
     """Generated-file content checks skip absent README, CI, and Cursor rule paths."""
     project_dir = _generated_project(tmp_path)
@@ -398,7 +434,7 @@ def test_config_consistency_skips_pyproject_comparisons_when_missing(tmp_path: P
     assert result.ok
 
 
-def _generated_project(tmp_path: Path) -> Path:
+def _generated_project(tmp_path: Path, *, ci: CiChoice = "github") -> Path:
     """Create a standard all-adapter generated project for checker tests."""
     options = build_init_options(
         "demo",
@@ -408,7 +444,7 @@ def _generated_project(tmp_path: Path) -> Path:
         license_name="MIT",
         python_min="3.13",
         coverage=95,
-        ci="github",
+        ci=ci,
         dry_run=False,
         force=False,
     )

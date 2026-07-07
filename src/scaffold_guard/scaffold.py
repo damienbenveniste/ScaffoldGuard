@@ -10,6 +10,7 @@ from scaffold_guard.adapters import adapters_for
 from scaffold_guard.fs import ensure_relative_safe_path, is_within_directory, write_text_safely
 from scaffold_guard.models import (
     AgentChoice,
+    CiChoice,
     InitOptions,
     LicenseChoice,
     ProfileChoice,
@@ -20,8 +21,9 @@ from scaffold_guard.renderer import TemplateRenderer
 
 PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 SUPPORTED_PROFILES = {"minimal", "package"}
+SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
-PACKAGE_TEMPLATE_SPECS = (
+PACKAGE_BASE_TEMPLATE_SPECS = (
     TemplateSpec("package/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("package/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
@@ -38,17 +40,23 @@ PACKAGE_TEMPLATE_SPECS = (
         "package/tests/integration/test_import_package.py.j2",
         "tests/integration/test_import_package.py",
     ),
+)
+PACKAGE_GITHUB_TEMPLATE_SPECS = (
     TemplateSpec("package/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
     TemplateSpec("package/github/workflows/docs.yml.j2", ".github/workflows/docs.yml"),
 )
-MINIMAL_TEMPLATE_SPECS = (
+PACKAGE_GITLAB_TEMPLATE_SPECS = (TemplateSpec("package/gitlab-ci.yml.j2", ".gitlab-ci.yml"),)
+MINIMAL_BASE_TEMPLATE_SPECS = (
     TemplateSpec("minimal/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("minimal/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
     TemplateSpec("minimal/gitignore.j2", ".gitignore"),
     TemplateSpec("minimal/scaffold-guard.toml.j2", "scaffold-guard.toml"),
+)
+MINIMAL_GITHUB_TEMPLATE_SPECS = (
     TemplateSpec("minimal/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
+MINIMAL_GITLAB_TEMPLATE_SPECS = (TemplateSpec("minimal/gitlab-ci.yml.j2", ".gitlab-ci.yml"),)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +99,7 @@ def build_init_options(
     license_name: LicenseChoice,
     python_min: str,
     coverage: int,
-    ci: str,
+    ci: CiChoice,
     dry_run: bool,
     force: bool,
 ) -> InitOptions:
@@ -106,7 +114,7 @@ def build_init_options(
     if profile not in SUPPORTED_PROFILES:
         msg = f"Unsupported project profile: {profile}"
         raise ValueError(msg)
-    if ci != "github":
+    if ci not in SUPPORTED_CI:
         msg = f"Unsupported CI provider: {ci}"
         raise ValueError(msg)
     return InitOptions(
@@ -138,7 +146,9 @@ def with_quality_tools(
 
 def build_render_context(options: InitOptions) -> Mapping[str, object]:
     """Return the shared template context for a generated package project."""
-    ci_enabled = options.ci == "github"
+    github_actions_enabled = options.ci == "github"
+    gitlab_ci_enabled = options.ci == "gitlab"
+    ci_enabled = github_actions_enabled or gitlab_ci_enabled
     configured_tools = _format_tool_list(
         (
             *(() if not options.ruff_enabled else ("Ruff",)),
@@ -156,6 +166,7 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "license": options.license,
         "python_min": options.python_min,
         "coverage": options.coverage,
+        "ci_provider": options.ci,
         "configured_tools": configured_tools,
         "use_ruff": options.ruff_enabled,
         "use_mypy": options.mypy_enabled,
@@ -168,6 +179,8 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "cursor_enabled": _toml_bool(options.cursor_enabled),
         "docs_enabled": _toml_bool(options.docs_enabled),
         "ci_enabled": _toml_bool(ci_enabled),
+        "github_actions_enabled": _toml_bool(github_actions_enabled),
+        "gitlab_ci_enabled": _toml_bool(gitlab_ci_enabled),
     }
 
 
@@ -191,15 +204,24 @@ def package_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
     adapter_specs = tuple(
         spec for adapter in adapters_for(options.agent) for spec in adapter.template_specs()
     )
-    profile_specs: tuple[TemplateSpec, ...] = (
-        MINIMAL_TEMPLATE_SPECS if options.profile == "minimal" else PACKAGE_TEMPLATE_SPECS
-    )
+    profile_specs = _profile_template_specs(options)
     if options.profile == "package" and options.pyright_enabled:
         profile_specs = (
             *profile_specs,
             TemplateSpec("package/pyrightconfig.json.j2", "pyrightconfig.json"),
         )
     return (*profile_specs, *adapter_specs)
+
+
+def _profile_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
+    """Return base profile templates plus selected CI provider templates."""
+    if options.profile == "minimal":
+        if options.ci == "gitlab":
+            return (*MINIMAL_BASE_TEMPLATE_SPECS, *MINIMAL_GITLAB_TEMPLATE_SPECS)
+        return (*MINIMAL_BASE_TEMPLATE_SPECS, *MINIMAL_GITHUB_TEMPLATE_SPECS)
+    if options.ci == "gitlab":
+        return (*PACKAGE_BASE_TEMPLATE_SPECS, *PACKAGE_GITLAB_TEMPLATE_SPECS)
+    return (*PACKAGE_BASE_TEMPLATE_SPECS, *PACKAGE_GITHUB_TEMPLATE_SPECS)
 
 
 def render_package_files(

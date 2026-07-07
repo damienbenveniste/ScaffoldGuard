@@ -11,9 +11,10 @@ from scaffold_guard.checks.config import (
     str_value,
     table_value,
 )
-from scaffold_guard.models import AgentChoice, InitOptions, ProfileChoice
+from scaffold_guard.models import AgentChoice, CiChoice, InitOptions, ProfileChoice
 
 SUPPORTED_PROFILES: tuple[ProfileChoice, ...] = ("minimal", "package")
+SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
 
 class ProjectConfigError(ValueError):
@@ -30,11 +31,13 @@ class GeneratedProjectConfig:
     profile: ProfileChoice
     python_min: str
     coverage_fail_under: int
+    ci: CiChoice
     codex: bool
     claude: bool
     cursor: bool
     docs: bool
     github_actions: bool
+    gitlab_ci: bool
     ruff: bool
     mypy: bool
     pyright: bool
@@ -61,7 +64,7 @@ class GeneratedProjectConfig:
             license="MIT",
             python_min=self.python_min,
             coverage=self.coverage_fail_under,
-            ci="github",
+            ci=self.ci,
             docs_enabled=self.docs,
             dry_run=dry_run,
             force=force,
@@ -78,6 +81,7 @@ class GeneratedProjectConfig:
             "profile": self.profile,
             "python_min": self.python_min,
             "coverage_fail_under": self.coverage_fail_under,
+            "ci": self.ci,
             "agents": {
                 "codex": self.codex,
                 "claude": self.claude,
@@ -86,6 +90,7 @@ class GeneratedProjectConfig:
             "features": {
                 "docs": self.docs,
                 "github_actions": self.github_actions,
+                "gitlab_ci": self.gitlab_ci,
             },
             "tools": {
                 "ruff": self.ruff,
@@ -113,6 +118,7 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     package = _required_str(project, "package")
     profile = _required_profile(project, "profile")
     tool_default = profile == "package"
+    ci = _optional_ci(project, features)
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
     return GeneratedProjectConfig(
@@ -122,11 +128,13 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
         profile=profile,
         python_min=python_min,
         coverage_fail_under=coverage,
+        ci=ci,
         codex=bool_value(agents, "codex", default=True),
         claude=bool_value(agents, "claude", default=False),
         cursor=bool_value(agents, "cursor", default=False),
         docs=bool_value(features, "docs", default=True),
-        github_actions=bool_value(features, "github_actions", default=True),
+        github_actions=bool_value(features, "github_actions", default=ci == "github"),
+        gitlab_ci=bool_value(features, "gitlab_ci", default=ci == "gitlab"),
         ruff=bool_value(tools, "ruff", default=tool_default),
         mypy=bool_value(tools, "mypy", default=tool_default),
         pyright=bool_value(tools, "pyright", default=tool_default),
@@ -149,6 +157,19 @@ def _required_profile(table: Mapping[str, object], key: str) -> ProfileChoice:
         return value
     msg = f"Unsupported generated project profile: {value}"
     raise ProjectConfigError(msg)
+
+
+def _optional_ci(project: Mapping[str, object], features: Mapping[str, object]) -> CiChoice:
+    """Return configured CI provider, defaulting old configs to GitHub Actions."""
+    value = str_value(project, "ci")
+    if value in SUPPORTED_CI:
+        return value
+    if value is not None:
+        msg = f"Unsupported generated project CI provider: {value}"
+        raise ProjectConfigError(msg)
+    if bool_value(features, "gitlab_ci", default=False):
+        return "gitlab"
+    return "github"
 
 
 def _required_int(table: Mapping[str, object], key: str) -> int:

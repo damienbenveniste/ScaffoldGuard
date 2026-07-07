@@ -132,6 +132,7 @@ def test_workflow_and_example_changes_require_specific_evidence(tmp_path: Path) 
         root,
         changed_files=(
             Path(".github/workflows/ci.yml"),
+            Path(".gitlab-ci.yml"),
             Path("examples/hello.py"),
             Path("LICENSE"),
             Path(".gitignore"),
@@ -140,7 +141,7 @@ def test_workflow_and_example_changes_require_specific_evidence(tmp_path: Path) 
         settings=ProjectValidationSettings(package_name="demo", coverage=95),
     )
 
-    assert "manual GitHub Actions workflow review" in report.required_validation
+    assert "manual CI workflow review" in report.required_validation
     assert "uv run pytest tests/integration" in report.required_validation
     assert any(area.label == "license" for area in report.changed_areas)
     assert any(area.label == "git ignore rules" for area in report.changed_areas)
