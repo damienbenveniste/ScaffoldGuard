@@ -28,9 +28,9 @@ scaffold-guard check
 scaffold-guard validate --quick
 ```
 
-The `init` command starts guided setup when `NAME` is omitted. Pass `NAME` and
-flags for non-interactive use, or use `scaffold-guard init .` from an existing
-empty folder.
+The `init` command starts guided setup when `NAME` is omitted, and
+`scaffold-guard init .` starts guided setup in an existing empty folder. Pass
+`NAME` or `.` with flags for non-interactive use.
 
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.

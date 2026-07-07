@@ -17,10 +17,10 @@ configuration change in this repository.
   instructions, strict local tooling, GitHub Actions CI, and policy checks that
   catch common agent mistakes.
 - Keep `scaffold-guard init` friendly for first-time users: omitting `NAME`
-  starts guided setup, while passing `NAME` and flags remains the stable
-  automation path. Support `scaffold-guard init .` for initializing the current
-  empty directory. Do not add guided-only generation behavior without matching
-  non-interactive flags.
+  starts guided setup, and bare `scaffold-guard init .` starts guided setup for
+  the current empty directory. Passing `NAME` or `.` with flags remains the
+  stable automation path. Do not add guided-only generation behavior without
+  matching non-interactive flags.
 - Treat `scaffold_guard_v1_implementation_plan.md` as the source of current
   product scope and acceptance criteria until the plan is moved into formal docs.
 - Keep V1 focused on a developer CLI. Do not add a SaaS dashboard, telemetry,

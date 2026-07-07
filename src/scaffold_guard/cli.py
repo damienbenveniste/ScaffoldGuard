@@ -1,6 +1,7 @@
 """Command line interface for scaffold-guard."""
 
 import json
+from contextvars import ContextVar
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -55,6 +56,20 @@ class CiOption(StrEnum):
 CHOICE_SEPARATOR = "/"
 COVERAGE_MIN = 1
 COVERAGE_MAX = 100
+INIT_OPTION_PARAMETER_NAMES = (
+    "agent",
+    "profile",
+    "license_name",
+    "python_min",
+    "coverage",
+    "ci",
+    "dry_run",
+    "force",
+)
+EXPLICIT_INIT_OPTIONS_SELECTED: ContextVar[bool] = ContextVar(
+    "explicit_init_options_selected",
+    default=False,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -86,7 +101,8 @@ def _print_init_summary(summary: ScaffoldSummary, *, agent: AgentOption) -> None
         typer.echo("  - Cursor: .cursor/rules/*.mdc + AGENTS.md")
     typer.echo()
     typer.echo("Next:")
-    typer.echo(f"  cd {summary.target_dir.name}")
+    if summary.target_dir.resolve(strict=False) != Path.cwd().resolve(strict=False):
+        typer.echo(f"  cd {summary.target_dir.name}")
     typer.echo("  uv sync --all-groups")
     typer.echo("  scaffold-guard check")
     typer.echo("  scaffold-guard validate")
@@ -204,6 +220,33 @@ def _prompt_init_options(
     )
 
 
+def _capture_explicit_init_options(
+    ctx: typer.Context,
+    _parameter: typer.CallbackParam,
+    value: str | None,
+) -> str | None:
+    """Record whether init behavior was selected with explicit CLI options."""
+    EXPLICIT_INIT_OPTIONS_SELECTED.set(False)
+    for parameter_name in INIT_OPTION_PARAMETER_NAMES:
+        source = ctx.get_parameter_source(parameter_name)
+        if source is not None and source.name == "COMMANDLINE":
+            EXPLICIT_INIT_OPTIONS_SELECTED.set(True)
+            break
+    return value
+
+
+def _has_explicit_init_options() -> bool:
+    """Return whether init behavior was selected with explicit CLI options."""
+    return EXPLICIT_INIT_OPTIONS_SELECTED.get()
+
+
+def _should_prompt_init(*, name: str | None, guided: bool) -> bool:
+    """Return whether init should start the guided prompt flow."""
+    if guided or name is None:
+        return True
+    return name.strip() == "." and not _has_explicit_init_options()
+
+
 def _print_check_report(report: CheckReport) -> None:
     """Print a human-readable check report."""
     typer.echo(f"scaffold-guard check: {'ok' if report.ok else 'failed'}")
@@ -287,7 +330,8 @@ def init_command(
         str | None,
         typer.Argument(
             help="Project directory name to create, or '.' to initialize the current directory. "
-            "Omit to use guided setup."
+            "Omit to use guided setup.",
+            callback=_capture_explicit_init_options,
         ),
     ] = None,
     agent: Annotated[
@@ -322,7 +366,7 @@ def init_command(
     force: Annotated[bool, typer.Option("--force", help="Overwrite generated files.")] = False,
 ) -> None:
     """Create a new ScaffoldGuard Python project."""
-    if guided or name is None:
+    if _should_prompt_init(name=name, guided=guided):
         name, agent, profile, license_name, python_min, coverage, ci = _prompt_init_options(
             name=name,
             agent=agent,
@@ -332,6 +376,8 @@ def init_command(
             coverage=coverage,
             ci=ci,
         )
+    if name is None:
+        _fail("Project name is required.")
     try:
         options = build_init_options(
             name,

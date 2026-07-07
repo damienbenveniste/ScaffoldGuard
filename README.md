@@ -53,11 +53,17 @@ For non-interactive use, pass the options as flags:
 scaffold-guard init my_project --agent all
 ```
 
-If you already created and entered an empty project folder, initialize the
-current directory:
+If you already created and entered an empty project folder, start guided setup
+for the current directory:
 
 ```bash
 scaffold-guard init .
+```
+
+For non-interactive current-directory setup, pass the options as flags:
+
+```bash
+scaffold-guard init . --agent codex
 ```
 
 Generate for one agent surface:

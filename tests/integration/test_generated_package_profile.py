@@ -213,11 +213,11 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     assert "Coverage floor must be between 1 and 100." in result.output
 
 
-def test_init_dot_generates_project_in_current_directory(
+def test_init_dot_with_explicit_options_generates_project_in_current_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`init .` writes the scaffold into an existing empty current directory."""
+    """Explicit options keep current-directory init non-interactive."""
     project_dir = tmp_path / "already-created"
     project_dir.mkdir()
     monkeypatch.chdir(project_dir)
@@ -228,7 +228,29 @@ def test_init_dot_generates_project_in_current_directory(
     assert (project_dir / "AGENTS.md").exists()
     assert (project_dir / "src/already_created/core.py").exists()
     assert not (project_dir / "already-created").exists()
+    assert "ScaffoldGuard guided setup" not in result.output
     assert "Created ScaffoldGuard Python project: already-created" in result.output
+    assert "  cd already-created" not in result.output
+
+
+def test_init_dot_without_explicit_options_runs_guided_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare `init .` starts guided setup in an existing empty current directory."""
+    project_dir = tmp_path / "guided-dot"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    result = CliRunner().invoke(app, ["init", "."], input="\ncodex\n\n\n\n\n\n")
+
+    assert result.exit_code == SUCCESS, result.output
+    assert (project_dir / "AGENTS.md").exists()
+    assert (project_dir / "src/guided_dot/core.py").exists()
+    assert not (project_dir / ".cursor").exists()
+    assert "ScaffoldGuard guided setup" in result.output
+    assert "Created ScaffoldGuard Python project: guided-dot" in result.output
+    assert "  cd guided-dot" not in result.output
 
 
 def test_init_guided_accepts_dot_for_current_directory(
