@@ -13,7 +13,10 @@ from scaffold_guard.models import (
     CiChoice,
     InitOptions,
     LicenseChoice,
+    MypyPresetChoice,
     ProfileChoice,
+    PyrightPresetChoice,
+    RuffPresetChoice,
     ScaffoldSummary,
     TemplateSpec,
 )
@@ -141,7 +144,23 @@ def with_quality_tools(
     pyright: bool,
 ) -> InitOptions:
     """Return init options with explicit generated quality-tool selections."""
-    return replace(options, ruff_enabled=ruff, mypy_enabled=mypy, pyright_enabled=pyright)
+    return with_quality_presets(
+        options,
+        ruff="strict" if ruff else "off",
+        mypy="strict" if mypy else "off",
+        pyright="strict" if pyright else "off",
+    )
+
+
+def with_quality_presets(
+    options: InitOptions,
+    *,
+    ruff: RuffPresetChoice,
+    mypy: MypyPresetChoice,
+    pyright: PyrightPresetChoice,
+) -> InitOptions:
+    """Return init options with explicit generated quality-tool presets."""
+    return replace(options, ruff_preset=ruff, mypy_preset=mypy, pyright_preset=pyright)
 
 
 def build_render_context(options: InitOptions) -> Mapping[str, object]:
@@ -149,6 +168,8 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
     github_actions_enabled = options.ci == "github"
     gitlab_ci_enabled = options.ci == "gitlab"
     ci_enabled = github_actions_enabled or gitlab_ci_enabled
+    ruff_select_rules = _ruff_select_rules(options.ruff_preset)
+    ruff_ignore_rules = _ruff_ignore_rules(options.ruff_preset)
     configured_tools = _format_tool_list(
         (
             *(() if not options.ruff_enabled else ("Ruff",)),
@@ -171,9 +192,19 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "use_ruff": options.ruff_enabled,
         "use_mypy": options.mypy_enabled,
         "use_pyright": options.pyright_enabled,
+        "ruff_preset": options.ruff_preset,
+        "mypy_preset": options.mypy_preset,
+        "pyright_preset": options.pyright_preset,
         "ruff_enabled": _toml_bool(options.ruff_enabled),
         "mypy_enabled": _toml_bool(options.mypy_enabled),
         "pyright_enabled": _toml_bool(options.pyright_enabled),
+        "ruff_select_rules_toml": _toml_string_list(ruff_select_rules),
+        "ruff_ignore_rules_toml": _toml_string_list(ruff_ignore_rules),
+        "ruff_has_ignores": bool(ruff_ignore_rules),
+        "ruff_uses_mccabe": "C90" in ruff_select_rules,
+        "ruff_uses_pylint": "PL" in ruff_select_rules,
+        "ruff_allows_test_asserts": "S" in ruff_select_rules,
+        "pyright_type_checking_mode": _pyright_type_checking_mode(options.pyright_preset),
         "codex_enabled": _toml_bool(options.codex_enabled),
         "claude_enabled": _toml_bool(options.claude_enabled),
         "cursor_enabled": _toml_bool(options.cursor_enabled),
@@ -313,6 +344,72 @@ def write_rendered_files(
 def _toml_bool(value: bool) -> str:
     """Render a Python boolean as TOML lowercase text."""
     return "true" if value else "false"
+
+
+def _toml_string_list(values: tuple[str, ...]) -> str:
+    """Render TOML string-array lines with stable indentation."""
+    return "\n".join(f'    "{value}",' for value in values)
+
+
+def _ruff_select_rules(preset: RuffPresetChoice) -> tuple[str, ...]:
+    """Return Ruff rule groups for a generated package quality preset."""
+    if preset == "strict":
+        return (
+            "ANN",
+            "ARG",
+            "B",
+            "C4",
+            "C90",
+            "E",
+            "F",
+            "I",
+            "N",
+            "PERF",
+            "PIE",
+            "PL",
+            "PT",
+            "PTH",
+            "RET",
+            "RUF",
+            "S",
+            "SIM",
+            "TRY",
+            "UP",
+        )
+    if preset == "standard":
+        return (
+            "B",
+            "C4",
+            "E",
+            "F",
+            "I",
+            "N",
+            "PERF",
+            "PIE",
+            "PT",
+            "PTH",
+            "RET",
+            "RUF",
+            "SIM",
+            "UP",
+        )
+    if preset == "minimal":
+        return ("E", "F", "I", "UP")
+    return ()
+
+
+def _ruff_ignore_rules(preset: RuffPresetChoice) -> tuple[str, ...]:
+    """Return Ruff rule ignores for a generated package quality preset."""
+    if preset == "strict":
+        return ("TRY003",)
+    return ()
+
+
+def _pyright_type_checking_mode(preset: PyrightPresetChoice) -> str:
+    """Return the Pyright type-checking mode for a generated package preset."""
+    if preset == "basic":
+        return "basic"
+    return "strict"
 
 
 def _format_tool_list(tools: tuple[str, ...]) -> str:

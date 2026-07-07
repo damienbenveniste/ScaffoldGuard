@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from scaffold_guard.checks.config import (
-    bool_value,
     int_value,
     load_scaffold_guard_toml,
     str_value,
     table_value,
+    tool_enabled,
 )
 
 PUBLIC_SYMBOL = re.compile(r"^(?:def|class)\s+([A-Za-z][A-Za-z0-9_]*)\b", flags=re.MULTILINE)
@@ -202,14 +202,12 @@ def load_project_validation_settings(root: Path) -> ProjectValidationSettings:
     """Load project package and coverage settings for validation command hints."""
     config = load_scaffold_guard_toml(root)
     project = table_value(config, "project")
-    tools = table_value(config, "tools")
-    tool_default = (str_value(project, "profile") or "package") == "package"
     return ProjectValidationSettings(
         package_name=str_value(project, "package"),
         coverage=int_value(project, "coverage_fail_under"),
-        ruff=bool_value(tools, "ruff", default=tool_default),
-        mypy=bool_value(tools, "mypy", default=tool_default),
-        pyright=bool_value(tools, "pyright", default=tool_default),
+        ruff=tool_enabled(root, "ruff"),
+        mypy=tool_enabled(root, "mypy"),
+        pyright=tool_enabled(root, "pyright"),
     )
 
 

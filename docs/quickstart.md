@@ -51,8 +51,8 @@ scaffold-guard init gitlab_demo --ci gitlab
 ```
 
 Use the `package` profile when you want a full Python package layout. Guided
-setup lets you keep or disable Ruff, mypy, and Pyright; all three are enabled
-by default.
+setup lets you choose Ruff, mypy, and Pyright presets; all three default to
+strict.
 
 ```bash
 scaffold-guard init package_demo --guided

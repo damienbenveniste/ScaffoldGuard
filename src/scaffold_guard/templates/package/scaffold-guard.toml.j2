@@ -18,9 +18,9 @@ gitlab_ci = {{ gitlab_ci_enabled }}
 mkdocs = {{ docs_enabled }}
 
 [tools]
-ruff = {{ ruff_enabled }}
-mypy = {{ mypy_enabled }}
-pyright = {{ pyright_enabled }}
+ruff = "{{ ruff_preset }}"
+mypy = "{{ mypy_preset }}"
+pyright = "{{ pyright_preset }}"
 
 [policy]
 forbid_type_ignore = {{ mypy_enabled }}

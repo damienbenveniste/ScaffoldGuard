@@ -14,6 +14,7 @@ from scaffold_guard.scaffold import (
     render_file,
     render_package_files,
     scaffold_package_project,
+    with_quality_presets,
     with_quality_tools,
     write_rendered_files,
 )
@@ -107,6 +108,35 @@ def test_build_init_options_accepts_disabled_quality_tools(tmp_path: Path) -> No
     assert not options.ruff_enabled
     assert not options.mypy_enabled
     assert not options.pyright_enabled
+
+
+def test_build_init_options_accepts_quality_presets(tmp_path: Path) -> None:
+    """CLI quality presets are retained in scaffold options."""
+    options = build_init_options(
+        "demo",
+        base_dir=tmp_path,
+        agent="all",
+        profile="package",
+        license_name="MIT",
+        python_min="3.13",
+        coverage=95,
+        ci="github",
+        dry_run=False,
+        force=False,
+    )
+    options = with_quality_presets(
+        options,
+        ruff="minimal",
+        mypy="standard",
+        pyright="basic",
+    )
+
+    assert options.ruff_preset == "minimal"
+    assert options.mypy_preset == "standard"
+    assert options.pyright_preset == "basic"
+    assert options.ruff_enabled
+    assert options.mypy_enabled
+    assert options.pyright_enabled
 
 
 def test_build_init_options_can_target_current_directory(tmp_path: Path) -> None:

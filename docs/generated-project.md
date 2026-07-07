@@ -13,8 +13,8 @@ my_project/
 ```
 
 The `package` profile creates a typed Python package with docs, examples,
-tests, CI, and agent instructions. Ruff, mypy, and Pyright are enabled by
-default, but package guided setup can disable any of them.
+tests, CI, and agent instructions. Ruff, mypy, and Pyright default to strict
+presets, but package guided setup can lower or disable each tool.
 
 ```text
 my_project/
@@ -49,7 +49,7 @@ CLAUDE.md
 
 - project name and import package;
 - selected agent adapters;
-- enabled package tools;
+- package quality tool presets;
 - docs and CI provider feature flags;
 - Python and test coverage settings;
 - fixed quick and full validation command descriptions.
@@ -67,7 +67,7 @@ scaffold-guard validate --quick
 ```
 
 Package projects additionally use their generated Python toolchain. Validation
-commands only include Ruff, mypy, and Pyright when those tools are enabled:
+commands only include Ruff, mypy, and Pyright when those tools are not `off`:
 
 ```bash
 uv sync --all-groups
@@ -78,3 +78,18 @@ scaffold-guard validate
 
 Use `inspect-diff` inside a git repository to understand which checks are
 required for a specific change.
+
+## Quality Presets
+
+Package projects support these generated tool presets:
+
+| Tool | Presets | Default |
+|---|---|---|
+| Ruff | `strict`, `standard`, `minimal`, `off` | `strict` |
+| mypy | `strict`, `standard`, `off` | `strict` |
+| Pyright | `strict`, `basic`, `off` | `strict` |
+
+`strict` mirrors ScaffoldGuard's own strict defaults. `standard` keeps balanced
+type and lint checks without the full strict rule set. `minimal` keeps Ruff
+formatting plus basic syntax, import, and upgrade checks. `off` omits that tool
+from dependencies, generated config, CI, and validation commands.

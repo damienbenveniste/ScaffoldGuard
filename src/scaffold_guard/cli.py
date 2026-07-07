@@ -20,7 +20,7 @@ from scaffold_guard.scaffold import (
     build_init_options,
     normalize_project_name,
     scaffold_package_project,
-    with_quality_tools,
+    with_quality_presets,
 )
 from scaffold_guard.validation import ValidationError, ValidationReport, run_validation
 
@@ -54,6 +54,31 @@ class CiOption(StrEnum):
 
     GITHUB = "github"
     GITLAB = "gitlab"
+
+
+class RuffPresetOption(StrEnum):
+    """Supported generated-project Ruff presets."""
+
+    STRICT = "strict"
+    STANDARD = "standard"
+    MINIMAL = "minimal"
+    OFF = "off"
+
+
+class MypyPresetOption(StrEnum):
+    """Supported generated-project mypy presets."""
+
+    STRICT = "strict"
+    STANDARD = "standard"
+    OFF = "off"
+
+
+class PyrightPresetOption(StrEnum):
+    """Supported generated-project Pyright presets."""
+
+    STRICT = "strict"
+    BASIC = "basic"
+    OFF = "off"
 
 
 CHOICE_SEPARATOR = "/"
@@ -93,9 +118,9 @@ def _print_init_summary(
     agent: AgentOption,
     profile: ProfileOption,
     ci: CiOption,
-    ruff: bool,
-    mypy: bool,
-    pyright: bool,
+    ruff_preset: RuffPresetOption,
+    mypy_preset: MypyPresetOption,
+    pyright_preset: PyrightPresetOption,
 ) -> None:
     """Print the user-facing summary after init planning or creation."""
     action = "Planned" if summary.dry_run else "Created"
@@ -114,9 +139,9 @@ def _print_init_summary(
     if profile == ProfileOption.PACKAGE:
         typer.echo()
         typer.echo("Python tooling:")
-        typer.echo(f"  - Ruff: {'enabled' if ruff else 'disabled'}")
-        typer.echo(f"  - mypy: {'enabled' if mypy else 'disabled'}")
-        typer.echo(f"  - Pyright: {'enabled' if pyright else 'disabled'}")
+        typer.echo(f"  - Ruff: {ruff_preset.value}")
+        typer.echo(f"  - mypy: {mypy_preset.value}")
+        typer.echo(f"  - Pyright: {pyright_preset.value}")
     typer.echo()
     typer.echo("CI:")
     typer.echo(f"  - {ci.value}")
@@ -194,16 +219,6 @@ def _prompt_coverage(default: int) -> int:
         )
 
 
-def _prompt_enabled(label: str, *, default: bool) -> bool:
-    """Prompt for an enabled/disabled feature selection."""
-    answer = _prompt_choice(
-        label,
-        choices=("yes", "no"),
-        default="yes" if default else "no",
-    )
-    return answer == "yes"
-
-
 def _prompt_init_options(
     *,
     name: str | None,
@@ -213,7 +228,21 @@ def _prompt_init_options(
     python_min: str,
     coverage: int,
     ci: CiOption,
-) -> tuple[str, AgentOption, ProfileOption, LicenseOption, str, int, CiOption, bool, bool, bool]:
+    ruff_preset: RuffPresetOption,
+    mypy_preset: MypyPresetOption,
+    pyright_preset: PyrightPresetOption,
+) -> tuple[
+    str,
+    AgentOption,
+    ProfileOption,
+    LicenseOption,
+    str,
+    int,
+    CiOption,
+    RuffPresetOption,
+    MypyPresetOption,
+    PyrightPresetOption,
+]:
     """Prompt for init options while preserving current flag defaults."""
     typer.echo("ScaffoldGuard guided setup")
     typer.echo()
@@ -241,15 +270,33 @@ def _prompt_init_options(
     )
     prompted_python_min = python_min
     prompted_coverage = coverage
-    prompted_ruff = True
-    prompted_mypy = True
-    prompted_pyright = True
+    prompted_ruff_preset = ruff_preset
+    prompted_mypy_preset = mypy_preset
+    prompted_pyright_preset = pyright_preset
     if prompted_profile == ProfileOption.PACKAGE:
         prompted_python_min = _prompt_text("Minimum Python version", default=python_min)
         prompted_coverage = _prompt_coverage(coverage)
-        prompted_ruff = _prompt_enabled("Use Ruff for formatting and linting", default=True)
-        prompted_mypy = _prompt_enabled("Use mypy for type checking", default=True)
-        prompted_pyright = _prompt_enabled("Use Pyright for type checking", default=True)
+        prompted_ruff_preset = RuffPresetOption(
+            _prompt_choice(
+                "Ruff preset",
+                choices=tuple(option.value for option in RuffPresetOption),
+                default=ruff_preset.value,
+            )
+        )
+        prompted_mypy_preset = MypyPresetOption(
+            _prompt_choice(
+                "mypy preset",
+                choices=tuple(option.value for option in MypyPresetOption),
+                default=mypy_preset.value,
+            )
+        )
+        prompted_pyright_preset = PyrightPresetOption(
+            _prompt_choice(
+                "Pyright preset",
+                choices=tuple(option.value for option in PyrightPresetOption),
+                default=pyright_preset.value,
+            )
+        )
     prompted_ci = CiOption(
         _prompt_choice(
             "CI provider",
@@ -265,9 +312,9 @@ def _prompt_init_options(
         prompted_python_min,
         prompted_coverage,
         prompted_ci,
-        prompted_ruff,
-        prompted_mypy,
-        prompted_pyright,
+        prompted_ruff_preset,
+        prompted_mypy_preset,
+        prompted_pyright_preset,
     )
 
 
@@ -416,9 +463,9 @@ def init_command(
     force: Annotated[bool, typer.Option("--force", help="Overwrite generated files.")] = False,
 ) -> None:
     """Create a new ScaffoldGuard project."""
-    ruff = True
-    mypy = True
-    pyright = True
+    ruff_preset = RuffPresetOption.STRICT
+    mypy_preset = MypyPresetOption.STRICT
+    pyright_preset = PyrightPresetOption.STRICT
     if _should_prompt_init(name=name, guided=guided):
         (
             name,
@@ -428,9 +475,9 @@ def init_command(
             python_min,
             coverage,
             ci,
-            ruff,
-            mypy,
-            pyright,
+            ruff_preset,
+            mypy_preset,
+            pyright_preset,
         ) = _prompt_init_options(
             name=name,
             agent=agent,
@@ -439,6 +486,9 @@ def init_command(
             python_min=python_min,
             coverage=coverage,
             ci=ci,
+            ruff_preset=ruff_preset,
+            mypy_preset=mypy_preset,
+            pyright_preset=pyright_preset,
         )
     if name is None:
         _fail("Project name is required.")
@@ -455,7 +505,12 @@ def init_command(
             dry_run=dry_run,
             force=force,
         )
-        options = with_quality_tools(options, ruff=ruff, mypy=mypy, pyright=pyright)
+        options = with_quality_presets(
+            options,
+            ruff=ruff_preset.value,
+            mypy=mypy_preset.value,
+            pyright=pyright_preset.value,
+        )
         summary = scaffold_package_project(options)
     except (FileExistsError, NotADirectoryError, ValueError) as exc:
         _fail(str(exc))
@@ -464,9 +519,9 @@ def init_command(
         agent=agent,
         profile=profile,
         ci=ci,
-        ruff=ruff,
-        mypy=mypy,
-        pyright=pyright,
+        ruff_preset=ruff_preset,
+        mypy_preset=mypy_preset,
+        pyright_preset=pyright_preset,
     )
 
 

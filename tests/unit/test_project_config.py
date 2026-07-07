@@ -51,7 +51,7 @@ def test_generated_project_config_round_trips_agent_selection(
         "github_actions": True,
         "gitlab_ci": False,
     }
-    assert payload["tools"] == {"ruff": True, "mypy": True, "pyright": True}
+    assert payload["tools"] == {"ruff": "strict", "mypy": "strict", "pyright": "strict"}
 
 
 def test_generated_project_config_round_trips_gitlab_ci(
@@ -94,7 +94,32 @@ def test_generated_project_config_round_trips_tool_selection(
     assert not options.ruff_enabled
     assert not options.mypy_enabled
     assert not options.pyright_enabled
-    assert payload["tools"] == {"ruff": False, "mypy": False, "pyright": False}
+    assert config.ruff_preset == "off"
+    assert config.mypy_preset == "off"
+    assert config.pyright_preset == "off"
+    assert payload["tools"] == {"ruff": "off", "mypy": "off", "pyright": "off"}
+
+
+def test_generated_project_config_loads_old_boolean_tool_config(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    replace_text: Callable[[Path, str, str], None],
+) -> None:
+    """Older generated boolean tool config still maps to strict/off presets."""
+    project_dir = generated_project(tmp_path)
+    config_path = project_dir / "scaffold-guard.toml"
+    replace_text(config_path, 'ruff = "strict"', "ruff = true")
+    replace_text(config_path, 'mypy = "strict"', "mypy = false")
+    replace_text(config_path, 'pyright = "strict"', "pyright = true")
+
+    config = load_generated_project_config(project_dir)
+
+    assert config.ruff_preset == "strict"
+    assert config.mypy_preset == "off"
+    assert config.pyright_preset == "strict"
+    assert config.ruff
+    assert not config.mypy
+    assert config.pyright
 
 
 def test_generated_project_config_rejects_missing_required_fields(

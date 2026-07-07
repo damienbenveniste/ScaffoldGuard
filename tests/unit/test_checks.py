@@ -316,11 +316,11 @@ def test_generated_files_detects_missing_readme_uv_and_ci_tools(tmp_path: Path) 
 
 
 def test_generated_files_respects_disabled_ci_tool_tokens(tmp_path: Path) -> None:
-    """CI token checks only require enabled package tools."""
+    """CI token checks only require non-off package tools."""
     project_dir = _generated_project(tmp_path)
-    _replace_text(project_dir / "scaffold-guard.toml", "ruff = true", "ruff = false")
-    _replace_text(project_dir / "scaffold-guard.toml", "mypy = true", "mypy = false")
-    _replace_text(project_dir / "scaffold-guard.toml", "pyright = true", "pyright = false")
+    _replace_text(project_dir / "scaffold-guard.toml", 'ruff = "strict"', 'ruff = "off"')
+    _replace_text(project_dir / "scaffold-guard.toml", 'mypy = "strict"', 'mypy = "off"')
+    _replace_text(project_dir / "scaffold-guard.toml", 'pyright = "strict"', 'pyright = "off"')
     (project_dir / ".github/workflows/ci.yml").write_text(
         "name: CI\nrun: uv sync && pytest && mkdocs\n",
         encoding="utf-8",

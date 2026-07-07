@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from scaffold_guard.checks.config import (
     bool_value,
@@ -11,7 +12,18 @@ from scaffold_guard.checks.config import (
     str_value,
     table_value,
 )
-from scaffold_guard.models import AgentChoice, CiChoice, InitOptions, ProfileChoice
+from scaffold_guard.models import (
+    MYPY_PRESETS,
+    PYRIGHT_PRESETS,
+    RUFF_PRESETS,
+    AgentChoice,
+    CiChoice,
+    InitOptions,
+    MypyPresetChoice,
+    ProfileChoice,
+    PyrightPresetChoice,
+    RuffPresetChoice,
+)
 
 SUPPORTED_PROFILES: tuple[ProfileChoice, ...] = ("minimal", "package")
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
@@ -38,9 +50,24 @@ class GeneratedProjectConfig:
     docs: bool
     github_actions: bool
     gitlab_ci: bool
-    ruff: bool
-    mypy: bool
-    pyright: bool
+    ruff_preset: RuffPresetChoice
+    mypy_preset: MypyPresetChoice
+    pyright_preset: PyrightPresetChoice
+
+    @property
+    def ruff(self) -> bool:
+        """Return whether Ruff is enabled."""
+        return self.ruff_preset != "off"
+
+    @property
+    def mypy(self) -> bool:
+        """Return whether mypy is enabled."""
+        return self.mypy_preset != "off"
+
+    @property
+    def pyright(self) -> bool:
+        """Return whether Pyright is enabled."""
+        return self.pyright_preset != "off"
 
     @property
     def agent_choice(self) -> AgentChoice:
@@ -68,9 +95,9 @@ class GeneratedProjectConfig:
             docs_enabled=self.docs,
             dry_run=dry_run,
             force=force,
-            ruff_enabled=self.ruff,
-            mypy_enabled=self.mypy,
-            pyright_enabled=self.pyright,
+            ruff_preset=self.ruff_preset,
+            mypy_preset=self.mypy_preset,
+            pyright_preset=self.pyright_preset,
         )
 
     def to_json(self) -> dict[str, object]:
@@ -93,9 +120,9 @@ class GeneratedProjectConfig:
                 "gitlab_ci": self.gitlab_ci,
             },
             "tools": {
-                "ruff": self.ruff,
-                "mypy": self.mypy,
-                "pyright": self.pyright,
+                "ruff": self.ruff_preset,
+                "mypy": self.mypy_preset,
+                "pyright": self.pyright_preset,
             },
         }
 
@@ -117,7 +144,7 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     name = _required_str(project, "name")
     package = _required_str(project, "package")
     profile = _required_profile(project, "profile")
-    tool_default = profile == "package"
+    tool_default = "strict" if profile == "package" else "off"
     ci = _optional_ci(project, features)
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
@@ -135,9 +162,9 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
         docs=bool_value(features, "docs", default=True),
         github_actions=bool_value(features, "github_actions", default=ci == "github"),
         gitlab_ci=bool_value(features, "gitlab_ci", default=ci == "gitlab"),
-        ruff=bool_value(tools, "ruff", default=tool_default),
-        mypy=bool_value(tools, "mypy", default=tool_default),
-        pyright=bool_value(tools, "pyright", default=tool_default),
+        ruff_preset=_optional_ruff_preset(tools, "ruff", default=tool_default),
+        mypy_preset=_optional_mypy_preset(tools, "mypy", default=tool_default),
+        pyright_preset=_optional_pyright_preset(tools, "pyright", default=tool_default),
     )
 
 
@@ -170,6 +197,62 @@ def _optional_ci(project: Mapping[str, object], features: Mapping[str, object]) 
     if bool_value(features, "gitlab_ci", default=False):
         return "gitlab"
     return "github"
+
+
+def _optional_ruff_preset(
+    table: Mapping[str, object],
+    key: str,
+    *,
+    default: str,
+) -> RuffPresetChoice:
+    """Return a Ruff preset, accepting old boolean configs for compatibility."""
+    return cast(
+        RuffPresetChoice, _optional_tool_preset(table, key, default=default, choices=RUFF_PRESETS)
+    )
+
+
+def _optional_mypy_preset(
+    table: Mapping[str, object],
+    key: str,
+    *,
+    default: str,
+) -> MypyPresetChoice:
+    """Return a mypy preset, accepting old boolean configs for compatibility."""
+    return cast(
+        MypyPresetChoice, _optional_tool_preset(table, key, default=default, choices=MYPY_PRESETS)
+    )
+
+
+def _optional_pyright_preset(
+    table: Mapping[str, object],
+    key: str,
+    *,
+    default: str,
+) -> PyrightPresetChoice:
+    """Return a Pyright preset, accepting old boolean configs for compatibility."""
+    return cast(
+        PyrightPresetChoice,
+        _optional_tool_preset(table, key, default=default, choices=PYRIGHT_PRESETS),
+    )
+
+
+def _optional_tool_preset(
+    table: Mapping[str, object],
+    key: str,
+    *,
+    default: str,
+    choices: tuple[str, ...],
+) -> str:
+    """Return a tool preset string from a new string value or old boolean value."""
+    value = table.get(key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return "strict" if value else "off"
+    if isinstance(value, str) and value in choices:
+        return value
+    msg = f"Unsupported generated project quality preset for {key}: {value}"
+    raise ProjectConfigError(msg)
 
 
 def _required_int(table: Mapping[str, object], key: str) -> int:

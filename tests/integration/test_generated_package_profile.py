@@ -133,13 +133,13 @@ def test_init_package_can_disable_quality_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Package scaffolds can opt out of Ruff, mypy, and Pyright."""
+    """Package scaffolds can opt out of Ruff, mypy, and Pyright presets."""
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(
         app,
         ["init", "demo", "--guided"],
-        input="\ncodex\npackage\nMIT\n3.13\n95\nno\nno\nno\ngithub\n",
+        input="\ncodex\npackage\nMIT\n3.13\n95\noff\noff\noff\ngithub\n",
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -156,23 +156,60 @@ def test_init_package_can_disable_quality_tools(
     assert "[tool.ruff]" not in pyproject
     assert "[tool.mypy]" not in pyproject
     assert tomllib.loads(pyproject)["dependency-groups"]
-    assert tomllib.loads(config)["tools"] == {"ruff": False, "mypy": False, "pyright": False}
+    assert tomllib.loads(config)["tools"] == {"ruff": "off", "mypy": "off", "pyright": "off"}
     assert "ruff" not in ci_workflow
     assert "mypy" not in ci_workflow
     assert "pyright" not in ci_workflow.lower()
-    assert "ruff = false" in config
-    assert "mypy = false" in config
-    assert "pyright = false" in config
+    assert 'ruff = "off"' in config
+    assert 'mypy = "off"' in config
+    assert 'pyright = "off"' in config
     assert "forbid_noqa = false" in config
     assert "forbid_type_ignore = false" in config
     assert "forbid_pyright_ignore = false" in config
-    assert "Ruff: disabled" in result.output
-    assert "mypy: disabled" in result.output
-    assert "Pyright: disabled" in result.output
+    assert "Ruff: off" in result.output
+    assert "mypy: off" in result.output
+    assert "Pyright: off" in result.output
     assert "ScaffoldGuard guided setup" in result.output
     assert "uv run ruff" not in agents
     assert "uv run mypy" not in agents
     assert "uv run pyright" not in agents
+
+
+def test_init_package_accepts_quality_tool_presets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Package scaffolds can select strictness presets for generated tools."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["init", "demo", "--guided"],
+        input="\ncodex\npackage\nMIT\n3.13\n95\nminimal\nstandard\nbasic\ngithub\n",
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    pyproject = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    pyright = (project_dir / "pyrightconfig.json").read_text(encoding="utf-8")
+    config = (project_dir / "scaffold-guard.toml").read_text(encoding="utf-8")
+
+    assert tomllib.loads(config)["tools"] == {
+        "ruff": "minimal",
+        "mypy": "standard",
+        "pyright": "basic",
+    }
+    assert '"E",' in pyproject
+    assert '"F",' in pyproject
+    assert '"I",' in pyproject
+    assert '"UP",' in pyproject
+    assert '"ANN",' not in pyproject
+    assert "disallow_untyped_defs = true" in pyproject
+    assert "strict = true" not in pyproject
+    assert '"typeCheckingMode": "basic"' in pyright
+    assert "Ruff: minimal" in result.output
+    assert "mypy: standard" in result.output
+    assert "Pyright: basic" in result.output
 
 
 def test_check_passes_in_fresh_generated_project(
@@ -287,7 +324,9 @@ def test_init_without_name_runs_guided_setup(
     result = CliRunner().invoke(
         app,
         ["init"],
-        input="guided-demo\nclaude\npackage\nApache-2.0\n3.14\n90\nyes\nyes\nyes\ngithub\n",
+        input=(
+            "guided-demo\nclaude\npackage\nApache-2.0\n3.14\n90\nstrict\nstrict\nstrict\ngithub\n"
+        ),
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -317,7 +356,7 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
         ["init"],
         input=(
             "demo\nbad-agent\ncodex\npackage\nMIT\n3.13\n"
-            "not-a-number\n101\n95\nmaybe\nyes\nyes\nyes\ngithub\n"
+            "not-a-number\n101\n95\nmaybe\nstrict\nstandard\nbasic\ngithub\n"
         ),
     )
 
@@ -325,7 +364,7 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     assert (tmp_path / "demo/AGENTS.md").exists()
     assert not (tmp_path / "demo/CLAUDE.md").exists()
     assert "Choose one of: codex, claude, cursor, all" in result.output
-    assert "Choose one of: yes, no" in result.output
+    assert "Choose one of: strict, standard, minimal, off" in result.output
     assert "Test coverage floor must be an integer." in result.output
     assert "Test coverage floor must be between 1 and 100." in result.output
 

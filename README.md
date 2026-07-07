@@ -76,8 +76,8 @@ scaffold-guard init gitlab_demo --ci gitlab
 ```
 
 Generate a full Python package scaffold when you want source, tests, docs, and
-package tooling. Guided setup lets you keep or disable Ruff, mypy, and Pyright;
-all three are enabled by default.
+package tooling. Guided setup lets you choose Ruff, mypy, and Pyright presets;
+all three default to strict.
 
 ```bash
 scaffold-guard init package_demo --guided

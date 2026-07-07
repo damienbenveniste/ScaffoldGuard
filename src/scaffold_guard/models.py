@@ -8,6 +8,13 @@ AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
 ProfileChoice: TypeAlias = Literal["minimal", "package"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
 CiChoice: TypeAlias = Literal["github", "gitlab"]
+RuffPresetChoice: TypeAlias = Literal["strict", "standard", "minimal", "off"]
+MypyPresetChoice: TypeAlias = Literal["strict", "standard", "off"]
+PyrightPresetChoice: TypeAlias = Literal["strict", "basic", "off"]
+
+RUFF_PRESETS: tuple[RuffPresetChoice, ...] = ("strict", "standard", "minimal", "off")
+MYPY_PRESETS: tuple[MypyPresetChoice, ...] = ("strict", "standard", "off")
+PYRIGHT_PRESETS: tuple[PyrightPresetChoice, ...] = ("strict", "basic", "off")
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,9 +41,24 @@ class InitOptions:
     docs_enabled: bool
     dry_run: bool
     force: bool
-    ruff_enabled: bool = True
-    mypy_enabled: bool = True
-    pyright_enabled: bool = True
+    ruff_preset: RuffPresetChoice = "strict"
+    mypy_preset: MypyPresetChoice = "strict"
+    pyright_preset: PyrightPresetChoice = "strict"
+
+    @property
+    def ruff_enabled(self) -> bool:
+        """Return whether Ruff should be configured in the generated package."""
+        return self.ruff_preset != "off"
+
+    @property
+    def mypy_enabled(self) -> bool:
+        """Return whether mypy should be configured in the generated package."""
+        return self.mypy_preset != "off"
+
+    @property
+    def pyright_enabled(self) -> bool:
+        """Return whether Pyright should be configured in the generated package."""
+        return self.pyright_preset != "off"
 
     @property
     def codex_enabled(self) -> bool:

@@ -93,9 +93,19 @@ def project_profile(root: Path) -> str:
 
 def tool_enabled(root: Path, name: str) -> bool:
     """Return whether a generated project has a named quality tool enabled."""
+    return tool_preset(root, name) != "off"
+
+
+def tool_preset(root: Path, name: str) -> str:
+    """Return a generated quality tool preset, accepting old boolean configs."""
     config = load_scaffold_guard_toml(root)
     tools = table_value(config, "tools")
-    return bool_value(tools, name, default=project_profile(root) == "package")
+    value = tools.get(name)
+    if isinstance(value, bool):
+        return "strict" if value else "off"
+    if isinstance(value, str):
+        return value
+    return "strict" if project_profile(root) == "package" else "off"
 
 
 def policy_enabled(root: Path, name: str) -> bool:
