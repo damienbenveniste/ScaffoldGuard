@@ -398,7 +398,7 @@ def test_config_consistency_detects_codex_mismatch(tmp_path: Path) -> None:
 
 
 def test_config_consistency_detects_python_and_coverage_mismatch(tmp_path: Path) -> None:
-    """Configured Python and coverage settings must match pyproject.toml."""
+    """Configured Python and test coverage settings must match pyproject.toml."""
     project_dir = _generated_project(tmp_path)
     _replace_text(project_dir / "pyproject.toml", ">=3.13", ">=3.12")
     _replace_text(project_dir / "pyproject.toml", "fail_under = 95", "fail_under = 90")

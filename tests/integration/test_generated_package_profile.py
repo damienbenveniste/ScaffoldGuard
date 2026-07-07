@@ -326,8 +326,8 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     assert not (tmp_path / "demo/CLAUDE.md").exists()
     assert "Choose one of: codex, claude, cursor, all" in result.output
     assert "Choose one of: yes, no" in result.output
-    assert "Coverage floor must be an integer." in result.output
-    assert "Coverage floor must be between 1 and 100." in result.output
+    assert "Test coverage floor must be an integer." in result.output
+    assert "Test coverage floor must be between 1 and 100." in result.output
 
 
 def test_init_dot_with_explicit_options_generates_project_in_current_directory(

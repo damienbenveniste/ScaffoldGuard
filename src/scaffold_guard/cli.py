@@ -178,18 +178,18 @@ def _prompt_text(label: str, *, default: str) -> str:
 
 
 def _prompt_coverage(default: int) -> int:
-    """Prompt for a coverage floor between 1 and 100."""
+    """Prompt for a test coverage floor between 1 and 100."""
     while True:
-        answer = str(typer.prompt("Coverage floor (1-100)", default=str(default))).strip()
+        answer = str(typer.prompt("Test coverage floor (1-100)", default=str(default))).strip()
         try:
             coverage = int(answer)
         except ValueError:
-            typer.echo("Coverage floor must be an integer.", err=True)
+            typer.echo("Test coverage floor must be an integer.", err=True)
             continue
         if COVERAGE_MIN <= coverage <= COVERAGE_MAX:
             return coverage
         typer.echo(
-            f"Coverage floor must be between {COVERAGE_MIN} and {COVERAGE_MAX}.",
+            f"Test coverage floor must be between {COVERAGE_MIN} and {COVERAGE_MAX}.",
             err=True,
         )
 
@@ -405,7 +405,7 @@ def init_command(
     ] = "3.13",
     coverage: Annotated[
         int,
-        typer.Option("--coverage", min=1, max=100, help="Generated project coverage floor."),
+        typer.Option("--coverage", min=1, max=100, help="Generated project test coverage floor."),
     ] = 95,
     ci: Annotated[CiOption, typer.Option("--ci", help="Generated CI provider.")] = CiOption.GITHUB,
     guided: Annotated[

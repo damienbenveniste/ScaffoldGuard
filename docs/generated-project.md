@@ -51,7 +51,7 @@ CLAUDE.md
 - selected agent adapters;
 - enabled package tools;
 - docs and CI provider feature flags;
-- Python and coverage settings;
+- Python and test coverage settings;
 - fixed quick and full validation command descriptions.
 
 V1 intentionally does not implement a general rules DSL. The generated config is
