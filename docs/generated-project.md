@@ -13,8 +13,9 @@ my_project/
 ```
 
 The `python` profile creates a typed Python package with docs, examples,
-tests, CI, and agent instructions. Ruff, mypy, and Pyright are enabled by
-default, but Python guided setup can disable any of them.
+tests, CI, and agent instructions. Strict Ruff plus mypy and Pyright are enabled
+by default. Python guided setup can switch Ruff linting and Python type checking
+to `standard` or `off`, and type checking can use mypy, Pyright, or both.
 
 ```text
 my_project/
@@ -107,8 +108,9 @@ scaffold-guard check
 scaffold-guard validate --quick
 ```
 
-Python-profile projects additionally use their generated Python toolchain. Validation
-commands only include Ruff, mypy, and Pyright when those tools are enabled:
+Python-profile projects additionally use their generated Python toolchain.
+Validation commands only include Ruff, mypy, and Pyright when those tools are
+enabled:
 
 ```bash
 uv sync --all-groups

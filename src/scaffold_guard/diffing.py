@@ -227,13 +227,31 @@ def load_project_validation_settings(root: Path) -> ProjectValidationSettings:
     except ValueError:
         profile = raw_profile
     tool_default = profile in {"python", "monorepo"}
+    ruff_mode = str_value(tools, "ruff_mode")
+    typecheck_mode = str_value(tools, "python_typecheck")
+    typechecker = str_value(tools, "python_typechecker") or "mypy+pyright"
+    ruff = (
+        ruff_mode != "off"
+        if ruff_mode in {"strict", "standard", "off"}
+        else bool_value(
+            tools,
+            "ruff",
+            default=tool_default,
+        )
+    )
+    if typecheck_mode in {"strict", "standard", "off"}:
+        mypy = typecheck_mode != "off" and typechecker in {"mypy+pyright", "mypy"}
+        pyright = typecheck_mode != "off" and typechecker in {"mypy+pyright", "pyright"}
+    else:
+        mypy = bool_value(tools, "mypy", default=tool_default)
+        pyright = bool_value(tools, "pyright", default=tool_default)
     return ProjectValidationSettings(
         package_name=str_value(project, "package"),
         coverage=int_value(project, "coverage_fail_under"),
         profile=profile,
-        ruff=bool_value(tools, "ruff", default=tool_default),
-        mypy=bool_value(tools, "mypy", default=tool_default),
-        pyright=bool_value(tools, "pyright", default=tool_default),
+        ruff=ruff,
+        mypy=mypy,
+        pyright=pyright,
         biome=bool_value(tools, "biome", default=profile in {"typescript", "monorepo"}),
         vitest=bool_value(tools, "vitest", default=profile in {"typescript", "monorepo"}),
     )

@@ -11,8 +11,8 @@ from scaffold_guard.diffing import (
     inspect_diff,
     load_project_validation_settings,
 )
-from scaffold_guard.models import ProfileChoice
-from scaffold_guard.scaffold import build_init_options, scaffold_package_project
+from scaffold_guard.models import ProfileChoice, PythonQualityMode, PythonTypechecker
+from scaffold_guard.scaffold import build_init_options, scaffold_package_project, with_quality_tools
 
 
 def test_source_change_requires_tests_validation_and_docs_evidence(tmp_path: Path) -> None:
@@ -295,6 +295,45 @@ def test_load_project_validation_settings_reads_generated_config(tmp_path: Path)
     assert settings == ProjectValidationSettings(package_name="demo", coverage=95)
 
 
+def test_load_project_validation_settings_reads_mode_aware_python_tools(tmp_path: Path) -> None:
+    """Mode-aware Python tool config feeds validation command hints."""
+    root = _generated_project(
+        tmp_path,
+        ruff_mode="standard",
+        mypy=False,
+        pyright=True,
+        python_typecheck_mode="standard",
+        python_typechecker="pyright",
+    )
+
+    settings = load_project_validation_settings(root)
+
+    assert settings == ProjectValidationSettings(
+        package_name="demo",
+        coverage=95,
+        ruff=True,
+        mypy=False,
+        pyright=True,
+    )
+
+
+def test_load_project_validation_settings_reads_mode_aware_python_tool_disablement(
+    tmp_path: Path,
+) -> None:
+    """Mode-aware off settings remove Python quality validation command hints."""
+    root = _generated_project(tmp_path, ruff=False, mypy=False, pyright=False)
+
+    settings = load_project_validation_settings(root)
+
+    assert settings == ProjectValidationSettings(
+        package_name="demo",
+        coverage=95,
+        ruff=False,
+        mypy=False,
+        pyright=False,
+    )
+
+
 def test_inspect_diff_rejects_missing_or_non_git_paths(tmp_path: Path) -> None:
     """Diff inspection fails clearly outside git repositories."""
     with pytest.raises(DiffInspectionError, match="does not exist"):
@@ -303,7 +342,17 @@ def test_inspect_diff_rejects_missing_or_non_git_paths(tmp_path: Path) -> None:
         inspect_diff(tmp_path, base="main")
 
 
-def _generated_project(tmp_path: Path, *, profile: ProfileChoice = "python") -> Path:
+def _generated_project(
+    tmp_path: Path,
+    *,
+    profile: ProfileChoice = "python",
+    ruff: bool = True,
+    mypy: bool = True,
+    pyright: bool = True,
+    ruff_mode: PythonQualityMode = "strict",
+    python_typecheck_mode: PythonQualityMode = "strict",
+    python_typechecker: PythonTypechecker = "mypy+pyright",
+) -> Path:
     """Create a standard generated project for diff classification tests."""
     options = build_init_options(
         "demo",
@@ -316,6 +365,15 @@ def _generated_project(tmp_path: Path, *, profile: ProfileChoice = "python") -> 
         ci="github",
         dry_run=False,
         force=False,
+    )
+    options = with_quality_tools(
+        options,
+        ruff=ruff,
+        mypy=mypy,
+        pyright=pyright,
+        ruff_mode=ruff_mode,
+        python_typecheck_mode=python_typecheck_mode,
+        python_typechecker=python_typechecker,
     )
     scaffold_package_project(options)
     return tmp_path / "demo"

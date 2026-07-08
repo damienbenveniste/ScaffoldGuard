@@ -13,6 +13,7 @@ from scaffold_guard.checks.config import (
     github_actions_enabled,
     gitlab_ci_enabled,
     table_value,
+    tool_enabled,
 )
 from scaffold_guard.checks.config_consistency import check_config_consistency
 from scaffold_guard.checks.files import gitignore_entries, iter_text_files
@@ -20,8 +21,10 @@ from scaffold_guard.checks.generated_files import check_generated_files
 from scaffold_guard.checks.project_health import check_project_health
 from scaffold_guard.checks.runner import run_checks
 from scaffold_guard.checks.unsafe_patterns import check_unsafe_patterns
-from scaffold_guard.models import CiChoice, ProfileChoice
+from scaffold_guard.models import CiChoice, ProfileChoice, PythonQualityMode, PythonTypechecker
 from scaffold_guard.scaffold import build_init_options, scaffold_package_project, with_quality_tools
+
+PythonQualitySelection = tuple[PythonQualityMode, PythonQualityMode, PythonTypechecker]
 
 
 def test_check_result_ok_ignores_warnings() -> None:
@@ -73,6 +76,46 @@ def test_config_helpers_default_when_config_missing(tmp_path: Path) -> None:
     assert github_actions_enabled(tmp_path)
     assert not gitlab_ci_enabled(tmp_path)
     assert table_value({"project": "not-table"}, "project") == {}
+
+
+def test_tool_enabled_reads_mode_aware_python_tool_config(tmp_path: Path) -> None:
+    """Mode-aware Python tool settings control generated checks."""
+    project_dir = _generated_project(
+        tmp_path,
+        mypy=False,
+        pyright=True,
+        python_quality=("standard", "standard", "pyright"),
+    )
+
+    assert tool_enabled(project_dir, "ruff")
+    assert not tool_enabled(project_dir, "mypy")
+    assert tool_enabled(project_dir, "pyright")
+
+
+def test_tool_enabled_respects_mode_aware_python_tool_disablement(tmp_path: Path) -> None:
+    """Mode-aware off settings disable generated Python quality checks."""
+    project_dir = _generated_project(tmp_path, ruff=False, mypy=False, pyright=False)
+
+    assert not tool_enabled(project_dir, "ruff")
+    assert not tool_enabled(project_dir, "mypy")
+    assert not tool_enabled(project_dir, "pyright")
+
+
+def test_tool_enabled_falls_back_to_legacy_python_booleans(tmp_path: Path) -> None:
+    """Legacy generated configs without mode fields still use tool booleans."""
+    project_dir = _generated_project(tmp_path)
+    config_path = project_dir / "scaffold-guard.toml"
+    config_lines = [
+        line
+        for line in config_path.read_text(encoding="utf-8").splitlines()
+        if not line.startswith(("ruff_mode =", "python_typecheck =", "python_typechecker ="))
+    ]
+    config_path.write_text("\n".join(config_lines) + "\n", encoding="utf-8")
+    _replace_text(config_path, "mypy = true", "mypy = false")
+
+    assert tool_enabled(project_dir, "ruff")
+    assert not tool_enabled(project_dir, "mypy")
+    assert tool_enabled(project_dir, "pyright")
 
 
 def test_file_helpers_ignore_runtime_cache_dirs_and_comments(tmp_path: Path) -> None:
@@ -518,10 +561,7 @@ def test_generated_files_checks_monorepo_readme_and_ci_tokens(tmp_path: Path) ->
 
 def test_generated_files_respects_disabled_ci_tool_tokens(tmp_path: Path) -> None:
     """CI token checks only require enabled package tools."""
-    project_dir = _generated_project(tmp_path)
-    _replace_text(project_dir / "scaffold-guard.toml", "ruff = true", "ruff = false")
-    _replace_text(project_dir / "scaffold-guard.toml", "mypy = true", "mypy = false")
-    _replace_text(project_dir / "scaffold-guard.toml", "pyright = true", "pyright = false")
+    project_dir = _generated_project(tmp_path, ruff=False, mypy=False, pyright=False)
     (project_dir / ".github/workflows/ci.yml").write_text(
         "name: CI\nrun: uv sync && pytest && mkdocs\n",
         encoding="utf-8",
@@ -672,10 +712,15 @@ def _generated_project(
     *,
     ci: CiChoice = "github",
     profile: ProfileChoice = "python",
+    ruff: bool = True,
+    mypy: bool = True,
+    pyright: bool = True,
+    python_quality: PythonQualitySelection = ("strict", "strict", "mypy+pyright"),
     biome: bool = True,
     vitest: bool = True,
 ) -> Path:
     """Create a standard all-adapter generated project for checker tests."""
+    ruff_mode, python_typecheck_mode, python_typechecker = python_quality
     options = build_init_options(
         "demo",
         base_dir=tmp_path,
@@ -690,9 +735,12 @@ def _generated_project(
     )
     options = with_quality_tools(
         options,
-        ruff=True,
-        mypy=True,
-        pyright=True,
+        ruff=ruff,
+        mypy=mypy,
+        pyright=pyright,
+        ruff_mode=ruff_mode,
+        python_typecheck_mode=python_typecheck_mode,
+        python_typechecker=python_typechecker,
         biome=biome,
         vitest=vitest,
     )

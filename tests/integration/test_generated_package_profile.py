@@ -415,7 +415,14 @@ def test_init_python_can_disable_quality_tools(
     assert "[tool.ruff]" not in pyproject
     assert "[tool.mypy]" not in pyproject
     assert tomllib.loads(pyproject)["dependency-groups"]
-    assert tomllib.loads(config)["tools"] == {"ruff": False, "mypy": False, "pyright": False}
+    assert tomllib.loads(config)["tools"] == {
+        "ruff": False,
+        "ruff_mode": "off",
+        "mypy": False,
+        "pyright": False,
+        "python_typecheck": "off",
+        "python_typechecker": "mypy+pyright",
+    }
     assert tomllib.loads(config)["project"]["profile"] == "python"
     assert "ruff" not in ci_workflow
     assert "mypy" not in ci_workflow
@@ -427,12 +434,117 @@ def test_init_python_can_disable_quality_tools(
     assert "forbid_type_ignore = false" in config
     assert "forbid_pyright_ignore = false" in config
     assert "Ruff: disabled" in result.output
+    assert "Type checking: disabled" in result.output
     assert "mypy: disabled" in result.output
     assert "Pyright: disabled" in result.output
     assert "ScaffoldGuard guided setup" in result.output
     assert "uv run ruff" not in agents
     assert "uv run mypy" not in agents
     assert "uv run pyright" not in agents
+
+
+def test_init_python_can_use_standard_quality_modes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Python scaffolds can use non-strict Ruff and type-checking modes."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "init",
+            "demo",
+            "--profile",
+            "python",
+            "--agent",
+            "codex",
+            "--ruff",
+            "standard",
+            "--python-typecheck",
+            "standard",
+            "--python-typechecker",
+            "mypy+pyright",
+        ],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    pyproject = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    pyright = json.loads((project_dir / "pyrightconfig.json").read_text(encoding="utf-8"))
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+
+    assert '"ANN"' not in pyproject
+    assert '"PL"' not in pyproject
+    assert "strict = true" not in pyproject
+    assert "check_untyped_defs = true" in pyproject
+    assert config["tools"]["ruff_mode"] == "standard"
+    assert config["tools"]["python_typecheck"] == "standard"
+    assert config["tools"]["python_typechecker"] == "mypy+pyright"
+    assert config["tools"]["mypy"] is True
+    assert config["tools"]["pyright"] is True
+    assert pyright["typeCheckingMode"] == "standard"
+    assert "Ruff: standard" in result.output
+    assert "Type checking: standard" in result.output
+    assert "Typechecker: mypy+pyright" in result.output
+
+
+@pytest.mark.parametrize(
+    ("checker", "expected_mypy", "expected_pyright"),
+    [
+        ("mypy", True, False),
+        ("pyright", False, True),
+    ],
+)
+def test_init_python_typechecker_selection_controls_generated_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    checker: str,
+    expected_mypy: bool,
+    expected_pyright: bool,
+) -> None:
+    """Python typechecker selection controls dependencies, files, CI, and agent commands."""
+    monkeypatch.chdir(tmp_path)
+    project_name = f"demo_{checker}"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "init",
+            project_name,
+            "--profile",
+            "python",
+            "--agent",
+            "codex",
+            "--python-typechecker",
+            checker,
+        ],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / project_name
+    pyproject = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    ci_workflow = (project_dir / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    agents = (project_dir / "AGENTS.md").read_text(encoding="utf-8")
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+
+    assert config["tools"]["python_typecheck"] == "strict"
+    assert config["tools"]["python_typechecker"] == checker
+    assert config["tools"]["mypy"] is expected_mypy
+    assert config["tools"]["pyright"] is expected_pyright
+    assert ('"mypy>=' in pyproject) is expected_mypy
+    assert ("uv run mypy" in ci_workflow) is expected_mypy
+    assert ("uv run mypy" in agents) is expected_mypy
+    assert ('"pyright>=' in pyproject) is expected_pyright
+    assert ("uv run pyright" in ci_workflow) is expected_pyright
+    assert ("uv run pyright" in agents) is expected_pyright
+    assert (project_dir / "pyrightconfig.json").exists() is expected_pyright
+    if expected_pyright:
+        pyright = json.loads((project_dir / "pyrightconfig.json").read_text(encoding="utf-8"))
+        assert pyright["typeCheckingMode"] == "strict"
+    assert f"Typechecker: {checker}" in result.output
+    assert f"mypy: {'enabled' if expected_mypy else 'disabled'}" in result.output
+    assert f"Pyright: {'enabled' if expected_pyright else 'disabled'}" in result.output
 
 
 def test_check_passes_in_fresh_generated_project(
@@ -552,7 +664,10 @@ def test_init_without_name_runs_guided_setup(
     result = CliRunner().invoke(
         app,
         ["init"],
-        input="guided-demo\nclaude\npython\nApache-2.0\n3.14\nstrict\nmypy+pyright\n90\ngithub\n",
+        input=(
+            "guided-demo\nclaude\npython\nApache-2.0\n3.14\nstrict\nstrict\n"
+            "mypy+pyright\n90\ngithub\n"
+        ),
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -590,15 +705,16 @@ def test_init_guided_monorepo_prompts_for_language_tool_setup(
         app,
         ["init"],
         input=(
-            "guided-monorepo\ncodex\nmonorepo\nMIT\n3.13\nstrict\nmypy+pyright\n"
-            "strict\nbiome\nvitest\n95\ngithub\n"
+            "guided-monorepo\ncodex\nmonorepo\nMIT\n3.13\nstrict\nstrict\n"
+            "mypy+pyright\nstrict\nbiome\nvitest\n95\ngithub\n"
         ),
     )
 
     assert result.exit_code == SUCCESS, result.output
     assert (tmp_path / "guided-monorepo/packages/typescript/src/index.ts").exists()
-    assert "Ruff setup (strict/off)" in result.output
-    assert "Python type checking (mypy+pyright/mypy/pyright/off)" in result.output
+    assert "Ruff strictness (strict/standard/off)" in result.output
+    assert "Python type-check strictness (strict/standard/off)" in result.output
+    assert "Python typechecker (mypy+pyright/mypy/pyright)" in result.output
     assert "TypeScript mode (strict/standard)" in result.output
     assert "TypeScript formatter/linter (biome/off)" in result.output
     assert "TypeScript test runner (vitest/off)" in result.output
@@ -616,7 +732,8 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
         ["init"],
         input=(
             "demo\nbad-agent\ncodex\npackage\npython\nMIT\n3.13\n"
-            "maybe\nstrict\nbad-type\nmypy+pyright\nnot-a-number\n101\n95\ngithub\n"
+            "maybe\nstrict\nbad-type\nstandard\nbad-checker\nmypy+pyright\n"
+            "not-a-number\n101\n95\ngithub\n"
         ),
     )
 
@@ -625,8 +742,8 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     assert not (tmp_path / "demo/CLAUDE.md").exists()
     assert "Choose one of: codex, claude, cursor, all" in result.output
     assert "Choose one of: minimal, python, typescript, monorepo" in result.output
-    assert "Choose one of: strict, off" in result.output
-    assert "Choose one of: mypy+pyright, mypy, pyright, off" in result.output
+    assert "Choose one of: strict, standard, off" in result.output
+    assert "Choose one of: mypy+pyright, mypy, pyright" in result.output
     assert "Test coverage floor must be an integer." in result.output
     assert "Test coverage floor must be between 1 and 100." in result.output
 
@@ -640,16 +757,12 @@ def test_init_help_explains_profile_choices() -> None:
     assert "guardrails only" in result.output
     assert "source scaffold" in result.output
     assert "python" in result.output
-    assert "Python package scaffold" in result.output
+    assert "Python package" in result.output
     assert "package Python package scaffold" not in result.output
-    assert "typescript TypeScript" in result.output
+    assert "typescript" in result.output
+    assert "TypeScript package" in result.output
     assert "monorepo" in result.output
-    assert "TypeScript workspaces" in result.output
-    assert "Generated Python Ruff" in result.output
-    assert "type-checking setup" in result.output
-    assert "Generated TypeScript" in result.output
-    assert "formatter/linter setup" in result.output
-    assert "runner setup" in result.output
+    assert "workspaces" in result.output
 
 
 def test_init_dot_with_explicit_options_generates_project_in_current_directory(

@@ -40,18 +40,24 @@ src = ["src", "tests", "examples"]
 
 [tool.ruff.lint]
 select = [
+{% if use_ruff_strict %}
     "ANN",
     "ARG",
+{% endif %}
     "B",
     "C4",
+{% if use_ruff_strict %}
     "C90",
+{% endif %}
     "E",
     "F",
     "I",
     "N",
     "PERF",
     "PIE",
+{% if use_ruff_strict %}
     "PL",
+{% endif %}
     "PT",
     "PTH",
     "RET",
@@ -65,6 +71,7 @@ ignore = [
     "TRY003",
 ]
 
+{% if use_ruff_strict %}
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
@@ -74,6 +81,7 @@ max-branches = 12
 max-returns = 6
 max-statements = 60
 
+{% endif %}
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
 {% endif %}
@@ -81,7 +89,12 @@ max-statements = 60
 {% if use_mypy %}
 [tool.mypy]
 python_version = "3.13"
+{% if use_python_typecheck_strict %}
 strict = true
+{% else %}
+check_untyped_defs = true
+no_implicit_optional = true
+{% endif %}
 warn_unreachable = true
 pretty = true
 show_error_codes = true

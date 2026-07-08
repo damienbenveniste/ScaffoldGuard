@@ -19,8 +19,11 @@ mkdocs = {{ docs_enabled }}
 
 [tools]
 ruff = {{ ruff_enabled }}
+ruff_mode = "{{ ruff_mode }}"
 mypy = {{ mypy_enabled }}
 pyright = {{ pyright_enabled }}
+python_typecheck = "{{ python_typecheck_mode }}"
+python_typechecker = "{{ python_typechecker }}"
 
 [policy]
 forbid_type_ignore = {{ mypy_enabled }}

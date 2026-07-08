@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from scaffold_guard.checks.config import (
     bool_value,
@@ -17,6 +18,8 @@ from scaffold_guard.models import (
     CiChoice,
     InitOptions,
     ProfileChoice,
+    PythonQualityMode,
+    PythonTypechecker,
     normalize_profile_choice,
     profile_includes_python,
     profile_includes_typescript,
@@ -50,6 +53,9 @@ class GeneratedProjectConfig:
     ruff: bool
     mypy: bool
     pyright: bool
+    ruff_mode: PythonQualityMode
+    python_typecheck_mode: PythonQualityMode
+    python_typechecker: PythonTypechecker
     typescript_strict: bool
     biome: bool
     vitest: bool
@@ -93,6 +99,9 @@ class GeneratedProjectConfig:
             ruff_enabled=self.ruff,
             mypy_enabled=self.mypy,
             pyright_enabled=self.pyright,
+            ruff_mode=self.ruff_mode,
+            python_typecheck_mode=self.python_typecheck_mode,
+            python_typechecker=self.python_typechecker,
             typescript_strict_enabled=self.typescript_strict,
             biome_enabled=self.biome,
             vitest_enabled=self.vitest,
@@ -102,8 +111,11 @@ class GeneratedProjectConfig:
         """Return JSON-serializable project config fields."""
         tools: dict[str, object] = {
             "ruff": self.ruff,
+            "ruff_mode": self.ruff_mode,
             "mypy": self.mypy,
             "pyright": self.pyright,
+            "python_typecheck": self.python_typecheck_mode,
+            "python_typechecker": self.python_typechecker,
         }
         if self.typescript:
             tools.update(
@@ -154,6 +166,21 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     profile = _required_profile(project, "profile")
     python_tool_default = profile_includes_python(profile)
     typescript_tool_default = profile_includes_typescript(profile)
+    ruff_mode = _optional_quality_mode(tools, "ruff_mode")
+    if ruff_mode is None:
+        ruff = bool_value(tools, "ruff", default=python_tool_default)
+        ruff_mode = "strict" if ruff else "off"
+    else:
+        ruff = ruff_mode != "off"
+    python_typecheck_mode = _optional_quality_mode(tools, "python_typecheck")
+    if python_typecheck_mode is None:
+        mypy = bool_value(tools, "mypy", default=python_tool_default)
+        pyright = bool_value(tools, "pyright", default=python_tool_default)
+        python_typecheck_mode = "strict" if (mypy or pyright) else "off"
+        python_typechecker = _typechecker_from_booleans(mypy=mypy, pyright=pyright)
+    else:
+        python_typechecker = _optional_typechecker(tools, "python_typechecker") or "mypy+pyright"
+        mypy, pyright = _typechecker_enabled(python_typecheck_mode, python_typechecker)
     ci = _optional_ci(project, features)
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
@@ -171,9 +198,12 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
         docs=bool_value(features, "docs", default=True),
         github_actions=bool_value(features, "github_actions", default=ci == "github"),
         gitlab_ci=bool_value(features, "gitlab_ci", default=ci == "gitlab"),
-        ruff=bool_value(tools, "ruff", default=python_tool_default),
-        mypy=bool_value(tools, "mypy", default=python_tool_default),
-        pyright=bool_value(tools, "pyright", default=python_tool_default),
+        ruff=ruff,
+        mypy=mypy,
+        pyright=pyright,
+        ruff_mode=ruff_mode,
+        python_typecheck_mode=python_typecheck_mode,
+        python_typechecker=python_typechecker,
         typescript_strict=bool_value(
             tools,
             "typescript_strict",
@@ -213,6 +243,41 @@ def _optional_ci(project: Mapping[str, object], features: Mapping[str, object]) 
     if bool_value(features, "gitlab_ci", default=False):
         return "gitlab"
     return "github"
+
+
+def _optional_quality_mode(table: Mapping[str, object], key: str) -> PythonQualityMode | None:
+    """Return an optional Python quality strictness mode."""
+    value = str_value(table, key)
+    if value in {"strict", "standard", "off"}:
+        return cast("PythonQualityMode", value)
+    return None
+
+
+def _optional_typechecker(table: Mapping[str, object], key: str) -> PythonTypechecker | None:
+    """Return an optional Python type checker selection."""
+    value = str_value(table, key)
+    if value in {"mypy+pyright", "mypy", "pyright"}:
+        return cast("PythonTypechecker", value)
+    return None
+
+
+def _typechecker_enabled(
+    mode: PythonQualityMode,
+    checker: PythonTypechecker,
+) -> tuple[bool, bool]:
+    """Return mypy and Pyright enablement for a type-checking mode and checker."""
+    if mode == "off":
+        return False, False
+    return checker in {"mypy+pyright", "mypy"}, checker in {"mypy+pyright", "pyright"}
+
+
+def _typechecker_from_booleans(*, mypy: bool, pyright: bool) -> PythonTypechecker:
+    """Return the closest checker selection represented by legacy booleans."""
+    if mypy and not pyright:
+        return "mypy"
+    if pyright and not mypy:
+        return "pyright"
+    return "mypy+pyright"
 
 
 def _required_int(table: Mapping[str, object], key: str) -> int:

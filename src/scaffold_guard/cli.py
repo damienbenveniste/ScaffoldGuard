@@ -60,19 +60,27 @@ class CiOption(StrEnum):
 
 
 class RuffSetupOption(StrEnum):
-    """Supported generated Python Ruff setup choices."""
+    """Supported generated Python Ruff linting choices."""
 
     STRICT = "strict"
+    STANDARD = "standard"
     OFF = "off"
 
 
-class PythonTypecheckOption(StrEnum):
-    """Supported generated Python type-checking choices."""
+class PythonTypecheckModeOption(StrEnum):
+    """Supported generated Python type-checking strictness choices."""
+
+    STRICT = "strict"
+    STANDARD = "standard"
+    OFF = "off"
+
+
+class PythonTypecheckerOption(StrEnum):
+    """Supported generated Python type checker selections."""
 
     MYPY_PYRIGHT = "mypy+pyright"
     MYPY = "mypy"
     PYRIGHT = "pyright"
-    OFF = "off"
 
 
 class TypeScriptModeOption(StrEnum):
@@ -110,6 +118,9 @@ class PromptedInitOptions:
     ruff: bool
     mypy: bool
     pyright: bool
+    ruff_setup: RuffSetupOption
+    python_typecheck_mode: PythonTypecheckModeOption
+    python_typechecker: PythonTypecheckerOption
     typescript_strict: bool
     biome: bool
     vitest: bool
@@ -127,7 +138,8 @@ class InitPromptDefaults:
     coverage: int
     ci: CiOption
     ruff_setup: RuffSetupOption
-    python_typecheck: PythonTypecheckOption
+    python_typecheck_mode: PythonTypecheckModeOption
+    python_typechecker: PythonTypecheckerOption
     typescript_mode: TypeScriptModeOption
     typescript_lint: TypeScriptLintOption
     typescript_test: TypeScriptTestOption
@@ -151,7 +163,8 @@ INIT_OPTION_PARAMETER_NAMES = (
     "coverage",
     "ci",
     "ruff_setup",
-    "python_typecheck",
+    "python_typecheck_mode",
+    "python_typechecker",
     "typescript_mode",
     "typescript_lint",
     "typescript_test",
@@ -182,9 +195,9 @@ def _print_init_summary(
     agent: AgentOption,
     profile: ProfileOption,
     ci: CiOption,
-    ruff: bool,
-    mypy: bool,
-    pyright: bool,
+    ruff_setup: RuffSetupOption,
+    python_typecheck_mode: PythonTypecheckModeOption,
+    python_typechecker: PythonTypecheckerOption,
     typescript_strict: bool,
     biome: bool,
     vitest: bool,
@@ -204,9 +217,19 @@ def _print_init_summary(
     if agent in {AgentOption.CURSOR, AgentOption.ALL}:
         typer.echo("  - Cursor: .cursor/rules/*.mdc + AGENTS.md")
     if profile in {ProfileOption.PYTHON, ProfileOption.MONOREPO}:
+        ruff = _ruff_enabled(ruff_setup)
+        mypy, pyright = _python_typecheck_enabled(python_typecheck_mode, python_typechecker)
+        typecheck_display = (
+            "disabled"
+            if python_typecheck_mode == PythonTypecheckModeOption.OFF
+            else python_typecheck_mode.value
+        )
         typer.echo()
         typer.echo("Python tooling:")
-        typer.echo(f"  - Ruff: {'enabled' if ruff else 'disabled'}")
+        typer.echo(f"  - Ruff: {ruff_setup.value if ruff else 'disabled'}")
+        typer.echo(f"  - Type checking: {typecheck_display}")
+        if python_typecheck_mode != PythonTypecheckModeOption.OFF:
+            typer.echo(f"  - Typechecker: {python_typechecker.value}")
         typer.echo(f"  - mypy: {'enabled' if mypy else 'disabled'}")
         typer.echo(f"  - Pyright: {'enabled' if pyright else 'disabled'}")
     if profile in {ProfileOption.TYPESCRIPT, ProfileOption.MONOREPO}:
@@ -309,14 +332,19 @@ def _prompt_coverage(default: int) -> int:
 
 def _ruff_enabled(option: RuffSetupOption) -> bool:
     """Return whether generated Python projects should include Ruff."""
-    return option == RuffSetupOption.STRICT
+    return option != RuffSetupOption.OFF
 
 
-def _python_typecheck_enabled(option: PythonTypecheckOption) -> tuple[bool, bool]:
+def _python_typecheck_enabled(
+    mode: PythonTypecheckModeOption,
+    checker: PythonTypecheckerOption,
+) -> tuple[bool, bool]:
     """Return mypy and Pyright enablement for a Python type-checking choice."""
+    if mode == PythonTypecheckModeOption.OFF:
+        return False, False
     return (
-        option in {PythonTypecheckOption.MYPY_PYRIGHT, PythonTypecheckOption.MYPY},
-        option in {PythonTypecheckOption.MYPY_PYRIGHT, PythonTypecheckOption.PYRIGHT},
+        checker in {PythonTypecheckerOption.MYPY_PYRIGHT, PythonTypecheckerOption.MYPY},
+        checker in {PythonTypecheckerOption.MYPY_PYRIGHT, PythonTypecheckerOption.PYRIGHT},
     )
 
 
@@ -375,6 +403,9 @@ def _prompt_init_options(defaults: InitPromptDefaults) -> PromptedInitOptions:
     prompted_ruff = False
     prompted_mypy = False
     prompted_pyright = False
+    prompted_ruff_setup = RuffSetupOption.OFF
+    prompted_python_typecheck_mode = PythonTypecheckModeOption.OFF
+    prompted_python_typechecker = defaults.python_typechecker
     prompted_typescript_strict = True
     prompted_biome = False
     prompted_vitest = False
@@ -382,20 +413,31 @@ def _prompt_init_options(defaults: InitPromptDefaults) -> PromptedInitOptions:
         prompted_python_min = _prompt_text("Minimum Python version", default=defaults.python_min)
         prompted_ruff_setup = RuffSetupOption(
             _prompt_choice(
-                "Ruff setup",
+                "Ruff strictness",
                 choices=tuple(option.value for option in RuffSetupOption),
                 default=defaults.ruff_setup.value,
             )
         )
-        prompted_python_typecheck = PythonTypecheckOption(
+        prompted_python_typecheck_mode = PythonTypecheckModeOption(
             _prompt_choice(
-                "Python type checking",
-                choices=tuple(option.value for option in PythonTypecheckOption),
-                default=defaults.python_typecheck.value,
+                "Python type-check strictness",
+                choices=tuple(option.value for option in PythonTypecheckModeOption),
+                default=defaults.python_typecheck_mode.value,
             )
         )
+        if prompted_python_typecheck_mode != PythonTypecheckModeOption.OFF:
+            prompted_python_typechecker = PythonTypecheckerOption(
+                _prompt_choice(
+                    "Python typechecker",
+                    choices=tuple(option.value for option in PythonTypecheckerOption),
+                    default=defaults.python_typechecker.value,
+                )
+            )
         prompted_ruff = _ruff_enabled(prompted_ruff_setup)
-        prompted_mypy, prompted_pyright = _python_typecheck_enabled(prompted_python_typecheck)
+        prompted_mypy, prompted_pyright = _python_typecheck_enabled(
+            prompted_python_typecheck_mode,
+            prompted_python_typechecker,
+        )
     if prompted_profile in {ProfileOption.TYPESCRIPT, ProfileOption.MONOREPO}:
         prompted_typescript_mode = TypeScriptModeOption(
             _prompt_choice(
@@ -441,6 +483,9 @@ def _prompt_init_options(defaults: InitPromptDefaults) -> PromptedInitOptions:
         ruff=prompted_ruff,
         mypy=prompted_mypy,
         pyright=prompted_pyright,
+        ruff_setup=prompted_ruff_setup,
+        python_typecheck_mode=prompted_python_typecheck_mode,
+        python_typechecker=prompted_python_typechecker,
         typescript_strict=prompted_typescript_strict,
         biome=prompted_biome,
         vitest=prompted_vitest,
@@ -573,8 +618,8 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
                 "Generated project profile: minimal guardrails only, no source scaffold; "
                 "python Python package scaffold; typescript TypeScript package scaffold; "
                 "monorepo Python + TypeScript workspaces. Tool setup is configured with "
-                "--ruff, --python-typecheck, --typescript-mode, --typescript-lint, and "
-                "--typescript-test."
+                "--ruff, --python-typecheck, --python-typechecker, --typescript-mode, "
+                "--typescript-lint, and --typescript-test."
             ),
         ),
     ] = ProfileOption.MINIMAL.value,
@@ -596,12 +641,16 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
     ci: Annotated[CiOption, typer.Option("--ci", help="Generated CI provider.")] = CiOption.GITHUB,
     ruff_setup: Annotated[
         RuffSetupOption,
-        typer.Option("--ruff", help="Generated Python Ruff setup."),
+        typer.Option("--ruff", help="Generated Python Ruff strictness."),
     ] = RuffSetupOption.STRICT,
-    python_typecheck: Annotated[
-        PythonTypecheckOption,
-        typer.Option("--python-typecheck", help="Generated Python type-checking setup."),
-    ] = PythonTypecheckOption.MYPY_PYRIGHT,
+    python_typecheck_mode: Annotated[
+        PythonTypecheckModeOption,
+        typer.Option("--python-typecheck", help="Generated Python type-checking strictness."),
+    ] = PythonTypecheckModeOption.STRICT,
+    python_typechecker: Annotated[
+        PythonTypecheckerOption,
+        typer.Option("--python-typechecker", help="Generated Python typechecker selection."),
+    ] = PythonTypecheckerOption.MYPY_PYRIGHT,
     typescript_mode: Annotated[
         TypeScriptModeOption,
         typer.Option("--typescript-mode", help="Generated TypeScript compiler mode."),
@@ -624,7 +673,7 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
     """Create a new ScaffoldGuard project."""
     profile_option = ProfileOption(profile)
     ruff = _ruff_enabled(ruff_setup)
-    mypy, pyright = _python_typecheck_enabled(python_typecheck)
+    mypy, pyright = _python_typecheck_enabled(python_typecheck_mode, python_typechecker)
     typescript_strict = _typescript_strict_enabled(typescript_mode)
     biome = _biome_enabled(typescript_lint)
     vitest = _vitest_enabled(typescript_test)
@@ -639,7 +688,8 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
                 coverage=coverage,
                 ci=ci,
                 ruff_setup=ruff_setup,
-                python_typecheck=python_typecheck,
+                python_typecheck_mode=python_typecheck_mode,
+                python_typechecker=python_typechecker,
                 typescript_mode=typescript_mode,
                 typescript_lint=typescript_lint,
                 typescript_test=typescript_test,
@@ -655,6 +705,9 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
         ruff = prompted_options.ruff
         mypy = prompted_options.mypy
         pyright = prompted_options.pyright
+        ruff_setup = prompted_options.ruff_setup
+        python_typecheck_mode = prompted_options.python_typecheck_mode
+        python_typechecker = prompted_options.python_typechecker
         typescript_strict = prompted_options.typescript_strict
         biome = prompted_options.biome
         vitest = prompted_options.vitest
@@ -662,6 +715,8 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
         ruff = False
         mypy = False
         pyright = False
+        ruff_setup = RuffSetupOption.OFF
+        python_typecheck_mode = PythonTypecheckModeOption.OFF
     if profile_option not in {ProfileOption.TYPESCRIPT, ProfileOption.MONOREPO}:
         biome = False
         vitest = False
@@ -685,6 +740,9 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
             ruff=ruff,
             mypy=mypy,
             pyright=pyright,
+            ruff_mode=ruff_setup.value,
+            python_typecheck_mode=python_typecheck_mode.value,
+            python_typechecker=python_typechecker.value,
             typescript_strict=typescript_strict,
             biome=biome,
             vitest=vitest,
@@ -697,9 +755,9 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
         agent=agent,
         profile=profile_option,
         ci=ci,
-        ruff=ruff,
-        mypy=mypy,
-        pyright=pyright,
+        ruff_setup=ruff_setup,
+        python_typecheck_mode=python_typecheck_mode,
+        python_typechecker=python_typechecker,
         typescript_strict=typescript_strict,
         biome=biome,
         vitest=vitest,

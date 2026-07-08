@@ -51,7 +51,14 @@ def test_generated_project_config_round_trips_agent_selection(
         "github_actions": True,
         "gitlab_ci": False,
     }
-    assert payload["tools"] == {"ruff": True, "mypy": True, "pyright": True}
+    assert payload["tools"] == {
+        "ruff": True,
+        "ruff_mode": "strict",
+        "mypy": True,
+        "pyright": True,
+        "python_typecheck": "strict",
+        "python_typechecker": "mypy+pyright",
+    }
 
 
 def test_generated_project_config_round_trips_gitlab_ci(
@@ -94,7 +101,51 @@ def test_generated_project_config_round_trips_tool_selection(
     assert not options.ruff_enabled
     assert not options.mypy_enabled
     assert not options.pyright_enabled
-    assert payload["tools"] == {"ruff": False, "mypy": False, "pyright": False}
+    assert payload["tools"] == {
+        "ruff": False,
+        "ruff_mode": "off",
+        "mypy": False,
+        "pyright": False,
+        "python_typecheck": "off",
+        "python_typechecker": "mypy+pyright",
+    }
+
+
+def test_generated_project_config_round_trips_python_quality_modes(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    replace_text: Callable[[Path, str, str], None],
+) -> None:
+    """Generated config exposes Python strictness and typechecker choices."""
+    project_dir = generated_project(tmp_path, mypy=False, pyright=True)
+    config_path = project_dir / "scaffold-guard.toml"
+    replace_text(config_path, 'ruff_mode = "strict"', 'ruff_mode = "standard"')
+    replace_text(config_path, 'python_typecheck = "strict"', 'python_typecheck = "standard"')
+    replace_text(
+        config_path, 'python_typechecker = "mypy+pyright"', 'python_typechecker = "pyright"'
+    )
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+    payload = config.to_json()
+
+    assert config.ruff
+    assert not config.mypy
+    assert config.pyright
+    assert config.ruff_mode == "standard"
+    assert config.python_typecheck_mode == "standard"
+    assert config.python_typechecker == "pyright"
+    assert options.ruff_mode == "standard"
+    assert options.python_typecheck_mode == "standard"
+    assert options.python_typechecker == "pyright"
+    assert payload["tools"] == {
+        "ruff": True,
+        "ruff_mode": "standard",
+        "mypy": False,
+        "pyright": True,
+        "python_typecheck": "standard",
+        "python_typechecker": "pyright",
+    }
 
 
 def test_generated_project_config_rejects_missing_required_fields(
@@ -161,8 +212,11 @@ def test_generated_project_config_loads_typescript_profile(
     assert not config.ruff
     assert payload["tools"] == {
         "ruff": False,
+        "ruff_mode": "off",
         "mypy": False,
         "pyright": False,
+        "python_typecheck": "off",
+        "python_typechecker": "mypy+pyright",
         "typescript": True,
         "typescript_strict": True,
         "biome": True,
@@ -222,8 +276,11 @@ def test_generated_project_config_round_trips_typescript_tool_selection(
     assert not options.vitest_enabled
     assert payload["tools"] == {
         "ruff": False,
+        "ruff_mode": "off",
         "mypy": False,
         "pyright": False,
+        "python_typecheck": "off",
+        "python_typechecker": "mypy+pyright",
         "typescript": True,
         "typescript_strict": False,
         "biome": False,

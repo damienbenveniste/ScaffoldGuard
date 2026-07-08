@@ -60,8 +60,9 @@ scaffold-guard init gitlab_demo --ci gitlab
 ```
 
 Use the `python` profile when you want a full Python package layout. Guided
-setup asks for Ruff and Python type-checking choices. Ruff, mypy, and Pyright
-are enabled by default.
+setup asks for Ruff linting strictness, Python type-checking strictness, and the
+Python type checker. Strict Ruff plus mypy and Pyright are enabled by default,
+but Ruff and type checking can each be set to `standard` or `off`.
 
 ```bash
 scaffold-guard init python_demo --guided

@@ -102,11 +102,40 @@ def tool_enabled(root: Path, name: str) -> bool:
     config = load_scaffold_guard_toml(root)
     tools = table_value(config, "tools")
     profile = project_profile(root)
-    if name in {"ruff", "mypy", "pyright"}:
-        return bool_value(tools, name, default=profile in {"python", "monorepo"})
+    python_default = profile in {"python", "monorepo"}
+    if name == "ruff":
+        return _ruff_enabled(tools, default=python_default)
+    if name in {"mypy", "pyright"}:
+        return _python_type_tool_enabled(tools, name=name, default=python_default)
     if name in {"typescript", "typescript_strict", "biome", "vitest"}:
         return bool_value(tools, name, default=profile in {"typescript", "monorepo"})
     return bool_value(tools, name, default=False)
+
+
+def _ruff_enabled(tools: Mapping[str, object], *, default: bool) -> bool:
+    """Return Ruff enablement from mode-aware or legacy tool config."""
+    ruff_mode = str_value(tools, "ruff_mode")
+    if ruff_mode in {"strict", "standard", "off"}:
+        return ruff_mode != "off"
+    return bool_value(tools, "ruff", default=default)
+
+
+def _python_type_tool_enabled(
+    tools: Mapping[str, object],
+    *,
+    name: str,
+    default: bool,
+) -> bool:
+    """Return mypy or Pyright enablement from mode-aware or legacy tool config."""
+    typecheck_mode = str_value(tools, "python_typecheck")
+    typechecker = str_value(tools, "python_typechecker") or "mypy+pyright"
+    if typecheck_mode not in {"strict", "standard", "off"}:
+        return bool_value(tools, name, default=default)
+    if typecheck_mode == "off":
+        return False
+    if name == "mypy":
+        return typechecker in {"mypy+pyright", "mypy"}
+    return typechecker in {"mypy+pyright", "pyright"}
 
 
 def policy_enabled(root: Path, name: str) -> bool:

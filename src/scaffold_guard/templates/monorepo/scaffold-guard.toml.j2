@@ -21,17 +21,20 @@ typescript = true
 
 [tools]
 ruff = {{ ruff_enabled }}
+ruff_mode = "{{ ruff_mode }}"
 mypy = {{ mypy_enabled }}
 pyright = {{ pyright_enabled }}
+python_typecheck = "{{ python_typecheck_mode }}"
+python_typechecker = "{{ python_typechecker }}"
 typescript = true
 typescript_strict = {{ typescript_strict_enabled }}
 biome = {{ biome_enabled }}
 vitest = {{ vitest_enabled }}
 
 [policy]
-forbid_type_ignore = true
+forbid_type_ignore = {{ mypy_enabled }}
 forbid_pyright_ignore = {{ pyright_enabled }}
-forbid_noqa = true
+forbid_noqa = {{ ruff_enabled }}
 forbid_any = true
 forbid_dict_str_any = true
 forbid_shell_true = true

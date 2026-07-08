@@ -8,6 +8,8 @@ AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
 ProfileChoice: TypeAlias = Literal["minimal", "python", "package", "typescript", "monorepo"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
 CiChoice: TypeAlias = Literal["github", "gitlab"]
+PythonQualityMode: TypeAlias = Literal["strict", "standard", "off"]
+PythonTypechecker: TypeAlias = Literal["mypy+pyright", "mypy", "pyright"]
 
 CANONICAL_PROFILES = {"minimal", "python", "typescript", "monorepo"}
 LEGACY_PROFILE_ALIASES = {"package": "python"}
@@ -62,6 +64,9 @@ class InitOptions:
     ruff_enabled: bool = True
     mypy_enabled: bool = True
     pyright_enabled: bool = True
+    ruff_mode: PythonQualityMode = "strict"
+    python_typecheck_mode: PythonQualityMode = "strict"
+    python_typechecker: PythonTypechecker = "mypy+pyright"
     typescript_strict_enabled: bool = True
     biome_enabled: bool = True
     vitest_enabled: bool = True

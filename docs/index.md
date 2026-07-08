@@ -35,11 +35,12 @@ project-name prompt blank to initialize the current empty folder, or enter a
 name to create a new project directory. Choose `python` when you want Python
 source, tests, docs, and Python tooling. Choose `typescript` for npm and
 TypeScript tooling. Choose `monorepo` when one repository should contain Python
-and TypeScript workspaces. Python and monorepo guided setup asks for Ruff and
-Python type-checking choices. TypeScript and monorepo guided setup asks for
-TypeScript compiler, formatter/linter, and test-runner choices. Pass `NAME` and
-flags for non-interactive use with defaults. Use `--ci gitlab` when the
-generated project should use GitLab CI instead of GitHub Actions.
+and TypeScript workspaces. Python and monorepo guided setup asks for Ruff
+linting strictness, Python type-checking strictness, and the Python type
+checker. TypeScript and monorepo guided setup asks for TypeScript compiler,
+formatter/linter, and test-runner choices. Pass `NAME` and flags for
+non-interactive use with defaults. Use `--ci gitlab` when the generated project
+should use GitLab CI instead of GitHub Actions.
 
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.

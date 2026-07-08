@@ -2,7 +2,7 @@
   "include": ["src", "tests", "examples"],
   "exclude": ["**/__pycache__", ".venv", ".mypy_cache", ".pytest_cache", ".ruff_cache"],
   "pythonVersion": "3.13",
-  "typeCheckingMode": "strict",
+  "typeCheckingMode": "{{ python_typecheck_mode }}",
   "venvPath": ".",
   "venv": ".venv",
   "executionEnvironments": [
