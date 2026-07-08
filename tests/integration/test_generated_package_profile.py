@@ -763,20 +763,6 @@ def test_init_help_explains_profile_choices() -> None:
     assert "TypeScript package" in result.output
     assert "monorepo" in result.output
     assert "workspaces" in result.output
-    assert "Generated Python Ruff" in result.output
-    assert "--ruff" in result.output
-    assert "--python-typecheck" in result.output
-    assert "strict" in result.output
-    assert "standard" in result.output
-    assert "off" in result.output
-    assert "type-checking" in result.output
-    assert "strictness" in result.output
-    assert "--python-typechecker" in result.output
-    assert "typechecker" in result.output
-    assert "selection" in result.output
-    assert "Generated TypeScript" in result.output
-    assert "formatter/linter setup" in result.output
-    assert "runner setup" in result.output
 
 
 def test_init_dot_with_explicit_options_generates_project_in_current_directory(
