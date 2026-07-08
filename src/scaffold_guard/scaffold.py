@@ -147,6 +147,7 @@ MONOREPO_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
 MONOREPO_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("monorepo/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
 )
+CONFLICT_DISPLAY_LIMIT: int = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,17 +448,9 @@ def scaffold_package_project(
     renderer: TemplateRenderer | None = None,
 ) -> ScaffoldSummary:
     """Render and write, or dry-run, a generated project."""
-    if options.target_dir.exists():
-        if not options.target_dir.is_dir():
-            msg = f"Target path is not a directory: {options.target_dir}"
-            raise NotADirectoryError(msg)
-        if any(options.target_dir.iterdir()) and not options.force:
-            msg = (
-                "Target directory already exists and is not empty; use --force to overwrite "
-                "generated files: "
-                f"{options.target_dir}"
-            )
-            raise FileExistsError(msg)
+    if options.target_dir.exists() and not options.target_dir.is_dir():
+        msg = f"Target path is not a directory: {options.target_dir}"
+        raise NotADirectoryError(msg)
 
     rendered_files = render_package_files(options, renderer=renderer)
     planned_files = write_rendered_files(
@@ -499,6 +492,21 @@ def write_rendered_files(
 
     if dry_run:
         return tuple(planned_paths)
+
+    if not force:
+        existing_destinations = tuple(path for path in planned_paths if (base / path).exists())
+        if existing_destinations:
+            formatted_paths = ", ".join(
+                path.as_posix() for path in existing_destinations[:CONFLICT_DISPLAY_LIMIT]
+            )
+            if len(existing_destinations) > CONFLICT_DISPLAY_LIMIT:
+                formatted_paths = f"{formatted_paths}, ..."
+            msg = (
+                "Target already contains file(s) ScaffoldGuard would generate; use --force "
+                "to overwrite generated files: "
+                f"{formatted_paths}"
+            )
+            raise FileExistsError(msg)
 
     base.mkdir(parents=True, exist_ok=True)
     for rendered_file, relative_path in zip(file_list, planned_paths, strict=True):

@@ -40,9 +40,11 @@ For non-interactive use with defaults, pass the options as flags:
 scaffold-guard init my_project --agent all
 ```
 
-If you already created and entered an empty project folder, run the same guided
-setup command from that folder. Press Enter at the project-name prompt to use
-the current directory:
+If you already created and entered a project folder, run the same guided setup
+command from that folder. Press Enter at the project-name prompt to use the
+current directory. Existing unrelated files are preserved; if a generated
+destination such as `README.md` already exists, ScaffoldGuard stops unless you
+rerun with `--force`.
 
 ```bash
 scaffold-guard init

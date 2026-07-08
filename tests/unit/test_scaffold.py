@@ -478,14 +478,32 @@ def test_scaffold_package_project_allows_existing_empty_target(tmp_path: Path) -
     assert (target_dir / "AGENTS.md").exists()
 
 
-def test_scaffold_package_project_rejects_non_empty_target_without_force(tmp_path: Path) -> None:
-    """The high-level init path refuses populated target directories unless forced."""
+def test_scaffold_package_project_allows_unrelated_existing_files(tmp_path: Path) -> None:
+    """The high-level init path preserves unrelated existing files."""
     target_dir = tmp_path / "demo"
     target_dir.mkdir()
-    (target_dir / "notes.txt").write_text("keep\n", encoding="utf-8")
+    notes = target_dir / "notes.txt"
+    notes.write_text("keep\n", encoding="utf-8")
 
-    with pytest.raises(FileExistsError, match="not empty"):
+    summary = scaffold_package_project(_init_options(tmp_path, agent="codex"))
+
+    assert Path("AGENTS.md") in summary.files
+    assert (target_dir / "AGENTS.md").exists()
+    assert notes.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_scaffold_package_project_rejects_existing_generated_destination(
+    tmp_path: Path,
+) -> None:
+    """Generated destination conflicts require explicit force before any writes."""
+    target_dir = tmp_path / "demo"
+    target_dir.mkdir()
+    (target_dir / "README.md").write_text("old\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="would generate"):
         scaffold_package_project(_init_options(tmp_path, agent="codex"))
+
+    assert not (target_dir / "AGENTS.md").exists()
 
 
 def test_scaffold_package_project_preserves_extra_files_with_force(tmp_path: Path) -> None:

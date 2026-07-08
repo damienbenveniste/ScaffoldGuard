@@ -1040,19 +1040,56 @@ def test_init_dry_run_creates_no_files(
     assert not (tmp_path / "demo").exists()
 
 
-def test_init_rejects_non_empty_existing_directory_without_force(
+def test_init_allows_unrelated_existing_files_without_force(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Populated target directories require explicit force."""
+    """Init preserves unrelated files in an existing target directory."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "demo").mkdir()
     (tmp_path / "demo/notes.txt").write_text("keep\n", encoding="utf-8")
 
     result = CliRunner().invoke(app, ["init", "demo", "--agent", "codex"])
 
+    assert result.exit_code == SUCCESS, result.output
+    assert (tmp_path / "demo/AGENTS.md").exists()
+    assert (tmp_path / "demo/notes.txt").read_text(encoding="utf-8") == "keep\n"
+
+
+def test_init_guided_current_directory_allows_unrelated_existing_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank guided project name can initialize a folder containing unrelated files."""
+    monkeypatch.chdir(tmp_path)
+    plan = tmp_path / "pyislands_v1_implementation_plan.md"
+    plan.write_text("# Plan\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        ["init"],
+        input="\ncodex\npython\nApache-2.0\n\n\n\n\n\n\n",
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    assert (tmp_path / "AGENTS.md").exists()
+    assert plan.read_text(encoding="utf-8") == "# Plan\n"
+
+
+def test_init_rejects_existing_generated_destination_without_force(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Generated destination conflicts require explicit force."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "demo").mkdir()
+    (tmp_path / "demo/README.md").write_text("old\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["init", "demo", "--agent", "codex"])
+
     assert result.exit_code != SUCCESS
-    assert "Target directory already exists and is not empty" in result.output
+    assert "Target already contains file(s) ScaffoldGuard would generate" in result.output
+    assert not (tmp_path / "demo/AGENTS.md").exists()
 
 
 def test_init_force_overwrites_generated_files_only(

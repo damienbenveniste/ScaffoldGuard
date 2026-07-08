@@ -28,8 +28,12 @@ scaffold-guard init [NAME]
 ```
 
 Omit `NAME` to start guided setup. At the project-name prompt, press Enter to
-initialize the current empty directory or enter a name to create a new
-directory. Pass `NAME` and flags for non-interactive use.
+initialize the current directory or enter a name to create a new directory. Pass
+`NAME` and flags for non-interactive use.
+
+When initializing an existing directory, ScaffoldGuard preserves unrelated files.
+It stops before writing if any planned generated destination already exists.
+Use `--force` only when you intentionally want to overwrite generated files.
 
 Common options:
 
