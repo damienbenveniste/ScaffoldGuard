@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.3 - 2026-07-08
+
+- Added `scaffold-guard publish` as an audited generated-project commit and
+  push path for approval-free Codex sessions.
+- Updated generated Codex git rules to allow `scaffold-guard publish` while
+  protecting raw `git commit` and `git push`.
+- Added matching Claude Code, Cursor, and shared `AGENTS.md` guidance for the
+  safe publish workflow.
+- Documented the new `publish` command and added regression coverage,
+  including a local bare-remote publish smoke test.
+
 ## 0.1.2 - 2026-07-08
 
 - Allowed `scaffold-guard init` to initialize an existing directory when its

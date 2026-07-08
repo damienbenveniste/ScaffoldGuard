@@ -13,11 +13,13 @@ scaffold-guard check
 scaffold-guard inspect-diff
 scaffold-guard validate --quick
 scaffold-guard validate
+scaffold-guard publish --message "Update project" --all
 ```
 
 `check` is the fast policy gate. `inspect-diff` tells you which validation
 evidence a change needs. `validate --quick` runs the generated quick gate.
-`validate` runs the full configured gate.
+`validate` runs the full configured gate. `publish` validates, commits, and
+pushes an explicitly reviewed scope.
 
 ## `init`
 
@@ -118,6 +120,50 @@ Exit codes:
 | `0` | All configured commands passed |
 | `1` | A configured validation command failed |
 | `2` | Configuration or tool error |
+
+## `publish`
+
+Validate, commit, and push a generated project through an audited path that does
+not rely on raw `git commit` or `git push` prompts.
+
+```bash
+scaffold-guard publish --message "Update project" --all
+scaffold-guard publish --message "Update docs" --file README.md --file docs/index.md
+scaffold-guard publish --push-only
+```
+
+Use `publish` when an agent has explicit user approval to publish work,
+especially in Codex sessions where approval prompts are unavailable. By
+default, it runs the full configured validation gate before staging or pushing.
+Pass `--quick` only when the quick gate is the accepted validation scope.
+
+Safety behavior:
+
+- `--message` is required unless `--push-only` is used.
+- `--all` stages every dirty file after validation.
+- `--file` must cover the full dirty scope; unselected dirty files stop the
+  publish.
+- mixed staged and unstaged work is refused.
+- `--push-only` requires a clean working tree.
+
+Common options:
+
+| Option | Use |
+|---|---|
+| `--message`, `-m` | Commit message for the reviewed changes |
+| `--all` | Stage and publish every dirty file |
+| `--file PATH` | Publish an exact dirty-file scope; repeat for multiple files |
+| `--remote NAME` | Push to a specific remote instead of upstream or `origin` |
+| `--branch NAME` | Push `HEAD` to a specific remote branch |
+| `--quick` | Run quick validation before publishing |
+| `--push-only` | Push existing commits without creating a commit |
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| `0` | Validation, commit if requested, and push succeeded |
+| `2` | Configuration, validation, git, or safety error |
 
 ## `compile-rules`
 
