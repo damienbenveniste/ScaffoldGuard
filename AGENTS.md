@@ -29,8 +29,6 @@ configuration change in this repository.
   per mature tool when a preset or scoped selector is clearer. Keep Python and
   TypeScript tool prompts profile-aware, and keep generated files, config, CI,
   validation, docs, and agent instructions synchronized with those choices.
-- Treat `scaffold_guard_v1_implementation_plan.md` as the source of current
-  product scope and acceptance criteria until the plan is moved into formal docs.
 - Keep V1 focused on a developer CLI. Do not add a SaaS dashboard, telemetry,
   external AI calls, complex YAML DSL, plugin ecosystem, publish automation, or
   automatic mutation of mature existing repositories.
@@ -61,14 +59,14 @@ configuration change in this repository.
 
 ## Working Style and Completion Bar
 
-- Start non-trivial tasks by checking the current plan, existing files, package
-  boundaries, tests, and repository state.
+- Start non-trivial tasks by checking current docs, issues, accepted scope,
+  existing files, package boundaries, tests, and repository state.
 - State assumptions, constraints, intended scope, and validation steps before
   substantial implementation.
 - Make the smallest safe change that fully satisfies the request. Avoid
   speculative rewrites and unrelated refactors.
-- Implement work in phases that can be validated independently. Do not treat the
-  entire V1 plan as one undifferentiated change.
+- Implement work in phases that can be validated independently. Do not treat
+  broad product scope as one undifferentiated change.
 - Finish the accepted scope. Do not silently skip requested details or stop after
   a partial implementation.
 - Never claim completion until the relevant checks have run, or until a blocker
