@@ -80,17 +80,22 @@ configuration change in this repository.
 
 ## Delegation, Subagents, and MCP
 
-- For every non-trivial implementation task, spawn at least one subagent before
-  substantial local edits. Use multiple subagents in parallel when the work has
+- For every non-trivial implementation task, delegate implementation to at
+  least one worker subagent before substantial local edits whenever subagent
+  tooling is available. Use multiple subagents in parallel when the work has
   separable concerns such as code mapping, template changes, docs, tests, or
   independent review.
-- Keep the main thread as coordinator: it owns the plan, instruction
-  interpretation, integration decisions, final validation, and user
-  communication. Do not let the main thread do all exploration and
-  implementation for broad tasks while subagents sit unused.
+- Keep the main thread as coordinator and available for user coordination and
+  new requests: it owns the plan, instruction interpretation, integration
+  decisions, final validation, and user communication. Do not let the main
+  thread do broad implementation work itself while subagent tooling is
+  available.
 - Assign subagents concrete ownership. Use read-only briefs for mapping,
-  test-gap discovery, documentation sweeps, and review. Use worker briefs for
-  disjoint implementation slices when edits can be separated cleanly.
+  test-gap discovery, documentation sweeps, and review. For broad
+  implementation work, using only a read-only or audit subagent is not
+  sufficient unless the implementation is tiny or cannot be cleanly delegated.
+  Use worker briefs for disjoint implementation slices when edits can be
+  separated cleanly.
 - Give each subagent a narrow brief with expected output: concrete file paths,
   risks, changed files if any, and recommended tests. Do not ask for broad
   summaries.
