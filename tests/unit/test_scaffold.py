@@ -180,6 +180,10 @@ def test_package_template_specs_include_selected_adapters(tmp_path: Path) -> Non
     assert "AGENTS.md" in codex_destinations
     assert ".codex/config.toml" in codex_destinations
     assert ".codex/hooks.json" in codex_destinations
+    assert ".codex/agents/implementation-worker.toml" in codex_destinations
+    assert ".codex/agents/docs-worker.toml" in codex_destinations
+    assert ".codex/agents/reviewer.toml" in codex_destinations
+    assert ".codex/hooks/workflow-evidence.sh" in codex_destinations
     assert ".codex/rules/git.rules" in codex_destinations
     assert ".codex/rules/validation.rules" in codex_destinations
     assert "CLAUDE.md" not in codex_destinations
@@ -314,15 +318,119 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
         _init_options(tmp_path, agent="codex", profile="monorepo")
     )
     rendered_by_path = {rendered_file.path: rendered_file for rendered_file in rendered_files}
+    config = rendered_by_path[Path(".codex/config.toml")].content
     hooks = rendered_by_path[Path(".codex/hooks.json")].content
+    hook_payload = json.loads(hooks)
     rules = rendered_by_path[Path(".codex/rules/validation.rules")].content
+    implementation_worker = rendered_by_path[
+        Path(".codex/agents/implementation-worker.toml")
+    ].content
+    docs_worker = rendered_by_path[Path(".codex/agents/docs-worker.toml")].content
+    reviewer = rendered_by_path[Path(".codex/agents/reviewer.toml")].content
+    evidence_hook = rendered_by_path[Path(".codex/hooks/workflow-evidence.sh")].content
 
+    assert "hooks = true" in config
+    assert "multi_agent = true" in config
+    assert "[agents]" in config
+    assert "max_threads = 4" in config
+    assert "max_depth = 1" in config
     assert '"PostToolUse"' in hooks
+    assert "SubagentStart" in hook_payload["hooks"]
+    assert "SubagentStop" in hook_payload["hooks"]
+    assert "Stop" in hook_payload["hooks"]
+    assert "workflow-evidence.sh" in hooks
     assert "git rev-parse --show-toplevel" in hooks
     assert 'scaffold-guard.toml\\" ]; do root=' in hooks
     assert 'scaffold-guard check --path \\"$root\\"' in hooks
+    assert 'name = "implementation-worker"' in implementation_worker
+    assert "Own only the files, modules, templates, or tests explicitly assigned" in (
+        implementation_worker
+    )
+    assert 'name = "docs-worker"' in docs_worker
+    assert "never document aspirational behavior as current" in docs_worker
+    assert 'name = "reviewer"' in reviewer
+    assert 'sandbox_mode = "read-only"' in reviewer
+    assert "Do not claim final task completion" in reviewer
+    assert "workflow evidence warning" in evidence_hook
+    assert "exit 0" in evidence_hook
     assert 'pattern = ["uv", "run", "ruff", "check", "packages/python"]' in rules
     assert 'pattern = ["npm", "run", "ts:typecheck"]' in rules
+
+
+def test_codex_workflow_evidence_hook_records_warning_only_jsonl(tmp_path: Path) -> None:
+    """The generated workflow evidence hook records local JSONL and exits successfully."""
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "scaffold-guard.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    log_path = tmp_path / "evidence.jsonl"
+    rendered_files = render_package_files(_init_options(tmp_path, agent="codex"))
+    hook_content = next(
+        file.content
+        for file in rendered_files
+        if file.path == Path(".codex/hooks/workflow-evidence.sh")
+    )
+    hook_path = tmp_path / "workflow-evidence.sh"
+    hook_path.write_text(hook_content, encoding="utf-8")
+    env = os.environ.copy()
+    env["CODEX_WORKFLOW_EVIDENCE_LOG"] = str(log_path)
+
+    stdout = asyncio.run(
+        _run_command_stdout(
+            f"/bin/sh {hook_path} post-tool-use {project_dir} edit",
+            cwd=project_dir,
+            env=env,
+        )
+    )
+    payload = json.loads(log_path.read_text(encoding="utf-8"))
+
+    assert stdout == ""
+    assert payload["source"] == "codex-hook"
+    assert payload["event"] == "post-tool-use"
+    assert payload["subject"] == "edit"
+    assert payload["root"] == str(project_dir)
+    assert payload["changed_files"] == 0
+
+
+def test_codex_workflow_evidence_hook_warns_when_edits_lack_subagent(
+    tmp_path: Path,
+) -> None:
+    """The stop hook warns when edits occurred without subagent evidence."""
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    (project_dir / "scaffold-guard.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    log_path = tmp_path / "evidence.jsonl"
+    state_path = Path(f"{log_path}.state")
+    rendered_files = render_package_files(_init_options(tmp_path, agent="codex"))
+    hook_content = next(
+        file.content
+        for file in rendered_files
+        if file.path == Path(".codex/hooks/workflow-evidence.sh")
+    )
+    hook_path = tmp_path / "workflow-evidence.sh"
+    hook_path.write_text(hook_content, encoding="utf-8")
+    env = os.environ.copy()
+    env["CODEX_WORKFLOW_EVIDENCE_LOG"] = str(log_path)
+
+    asyncio.run(
+        _run_command(
+            f"/bin/sh {hook_path} post-tool-use {project_dir} edit",
+            cwd=project_dir,
+            env=env,
+        )
+    )
+    stdout, stderr = asyncio.run(
+        _run_command(f"/bin/sh {hook_path} stop {project_dir} turn", cwd=project_dir, env=env)
+    )
+    records = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert stdout == ""
+    assert "no SubagentStart evidence was recorded" in stderr
+    assert not state_path.exists()
+    assert [record["event"] for record in records] == ["post-tool-use", "stop"]
 
 
 def test_codex_hook_command_resolves_non_git_subdirectory_root(tmp_path: Path) -> None:
@@ -554,6 +662,12 @@ def _init_options(
 
 async def _run_command_stdout(command: str, *, cwd: Path, env: dict[str, str]) -> str:
     """Run a generated shell command and return stdout."""
+    stdout, _stderr = await _run_command(command, cwd=cwd, env=env)
+    return stdout
+
+
+async def _run_command(command: str, *, cwd: Path, env: dict[str, str]) -> tuple[str, str]:
+    """Run a generated shell command and return stdout plus stderr."""
     process = await asyncio.create_subprocess_exec(
         *shlex.split(command),
         cwd=cwd,
@@ -563,4 +677,4 @@ async def _run_command_stdout(command: str, *, cwd: Path, env: dict[str, str]) -
     )
     stdout, stderr = await process.communicate()
     assert process.returncode == 0, stderr.decode("utf-8", errors="replace")
-    return stdout.decode("utf-8", errors="replace")
+    return stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace")

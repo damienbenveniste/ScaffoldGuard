@@ -4,15 +4,23 @@
 
 Codex uses a layered project adapter:
 
-- `AGENTS.md` defines shared behavior and repository operating rules.
-- `.codex/config.toml` sets project mode and permissions after the project is
-  trusted.
-- `.codex/rules/*.rules` defines allowed, prompted, and forbidden command
-  prefixes.
-- `.codex/hooks.json` runs generated checks around tool use.
+- `AGENTS.md` remains behavioral guidance. It defines shared operating rules
+  and does not carry Codex feature toggles, command policy, or generated check
+  wiring.
+- `.codex/config.toml` enables Codex features and project-scoped agent defaults
+  after the project is trusted.
+- `.codex/agents/*.toml` defines narrow project-scoped worker and reviewer
+  agents for delegated implementation, docs, and review slices.
+- `.codex/rules/*.rules` handles command permission policy through allowed,
+  prompted, and forbidden command prefixes.
+- `.codex/hooks.json` runs generated hook commands for mechanical workflow
+  evidence and checks around tool use.
 
-The `codex` adapter currently generates `.codex/rules/git.rules` and
-`.codex/rules/validation.rules`.
+The `codex` adapter currently generates project-scoped worker agents,
+`.codex/rules/git.rules`, `.codex/rules/validation.rules`, and
+`.codex/hooks/workflow-evidence.sh`. Its generated hooks run
+`scaffold-guard check` after file-edit tool use, record subagent workflow
+evidence, and warn when edits are observed without subagent start evidence.
 
 ## Claude Code
 
@@ -24,7 +32,7 @@ that references `AGENTS.md` and adds Claude-specific notes. It also creates
 the shared source of truth.
 
 Language-specific Claude rules follow the selected profile: Python rules are
-included for `package` and `monorepo`, and TypeScript rules are included for
+included for `python` and `monorepo`, and TypeScript rules are included for
 `typescript` and `monorepo`.
 
 ## Cursor

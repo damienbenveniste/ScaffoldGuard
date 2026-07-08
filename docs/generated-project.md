@@ -7,6 +7,8 @@ my_project/
   AGENTS.md
   .codex/config.toml
   .codex/hooks.json
+  .codex/agents/*.toml
+  .codex/hooks/workflow-evidence.sh
   .codex/rules/git.rules
   .codex/rules/validation.rules
   README.md
@@ -48,6 +50,8 @@ also includes:
 # codex
 .codex/config.toml
 .codex/hooks.json
+.codex/agents/*.toml
+.codex/hooks/workflow-evidence.sh
 .codex/rules/git.rules
 .codex/rules/validation.rules
 
@@ -59,9 +63,12 @@ CLAUDE.md
 .cursor/rules/*.mdc
 ```
 
-The Codex files are layered: `AGENTS.md` defines behavior, `.codex/config.toml`
-sets project mode and permissions, `.codex/rules/*.rules` defines command
-policy, and `.codex/hooks.json` runs generated checks around tool use.
+The Codex files are layered: `AGENTS.md` remains behavioral guidance,
+`.codex/config.toml` enables Codex features and project-scoped agent defaults,
+`.codex/agents/*.toml` defines project-scoped worker defaults,
+`.codex/rules/*.rules` handles command permission policy, and
+`.codex/hooks.json` runs generated hook commands for mechanical workflow
+evidence and checks around tool use through `.codex/hooks/workflow-evidence.sh`.
 
 The `typescript` profile creates a TypeScript package with npm scripts,
 TypeScript, configurable compiler strictness, optional Biome, optional Vitest,

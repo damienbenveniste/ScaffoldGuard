@@ -23,6 +23,10 @@ FULL_COVERAGE = 100
 CODEX_ADAPTER_FILES = {
     Path(".codex/config.toml"),
     Path(".codex/hooks.json"),
+    Path(".codex/agents/implementation-worker.toml"),
+    Path(".codex/agents/docs-worker.toml"),
+    Path(".codex/agents/reviewer.toml"),
+    Path(".codex/hooks/workflow-evidence.sh"),
     Path(".codex/rules/git.rules"),
     Path(".codex/rules/validation.rules"),
 }
@@ -134,13 +138,15 @@ def test_init_codex_generates_valid_package_tree(
     assert "  - Home: index.md" in mkdocs_config
     assert "Created ScaffoldGuard python project: demo" in result.output
     assert "Codex: AGENTS.md" in result.output
+    assert ".codex/agents/*.toml" in result.output
     agents = (project_dir / "AGENTS.md").read_text(encoding="utf-8")
     assert "dataclass(frozen=True, slots=True)" in agents
     assert "TypedDict" in agents
     assert "Use Pydantic only at runtime-validation boundaries" in agents
     assert "Add docstrings to public modules" in agents
     assert "Keep the main thread focused on decisions" in agents
-    assert "Use subagents for bounded, read-only work" in agents
+    assert "For non-trivial implementation work, use worker subagents" in agents
+    assert "Use read-only subagents for bounded work" in agents
     assert "Use MCP servers when available" in agents
 
     _assert_no_unresolved_project_placeholders(project_dir)
@@ -820,11 +826,13 @@ def test_init_all_generates_all_adapter_files(
     agents = (project_dir / "AGENTS.md").read_text(encoding="utf-8")
     cursor_testing = (project_dir / ".cursor/rules/testing.mdc").read_text(encoding="utf-8")
     assert "alwaysApply: false" in cursor_testing
-    assert "Use subagents for bounded, read-only work" in agents
+    assert "For non-trivial implementation work, use worker subagents" in agents
+    assert "Use read-only subagents for bounded work" in agents
     assert "Use dataclasses for internal structured state" in agents
     assert "TypedDict" in agents
     assert "Claude Code: CLAUDE.md + .claude/rules/" in result.output
     assert "Cursor: .cursor/rules/*.mdc + AGENTS.md" in result.output
+    assert ".codex/agents/*.toml" in result.output
 
 
 def test_init_without_name_runs_guided_setup(

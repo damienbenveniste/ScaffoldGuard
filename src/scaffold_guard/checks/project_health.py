@@ -17,6 +17,10 @@ from scaffold_guard.checks.config import (
 CODEX_ADAPTER_PATHS = (
     Path(".codex/config.toml"),
     Path(".codex/hooks.json"),
+    Path(".codex/agents/implementation-worker.toml"),
+    Path(".codex/agents/docs-worker.toml"),
+    Path(".codex/agents/reviewer.toml"),
+    Path(".codex/hooks/workflow-evidence.sh"),
     Path(".codex/rules/git.rules"),
     Path(".codex/rules/validation.rules"),
 )

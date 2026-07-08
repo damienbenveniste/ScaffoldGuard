@@ -123,6 +123,8 @@ my_project/
   AGENTS.md
   .codex/config.toml
   .codex/hooks.json
+  .codex/agents/*.toml
+  .codex/hooks/workflow-evidence.sh
   .codex/rules/git.rules
   .codex/rules/validation.rules
   README.md
@@ -190,15 +192,17 @@ Adapter files are added according to `--agent`:
 
 | Agent | Generated files |
 |---|---|
-| `codex` | `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.codex/rules/*.rules` |
+| `codex` | `AGENTS.md`, `.codex/config.toml`, `.codex/agents/*.toml`, `.codex/hooks.json`, `.codex/hooks/workflow-evidence.sh`, `.codex/rules/*.rules` |
 | `claude` | `AGENTS.md`, `CLAUDE.md`, `.claude/rules/*.md` |
 | `cursor` | `AGENTS.md`, `.cursor/rules/*.mdc` |
 | `all` | all of the above |
 
-For Codex, `AGENTS.md` describes how agents should behave, `.codex/config.toml`
-sets project mode and permissions, `.codex/rules/*.rules` defines allowed,
-prompted, and forbidden command prefixes, and `.codex/hooks.json` runs generated
-checks around tool use.
+For Codex, `AGENTS.md` remains behavioral guidance: it tells agents how to work
+in the repository. `.codex/config.toml` enables Codex features and
+project-scoped agent defaults, `.codex/rules/*.rules` handles command
+permission policy, and `.codex/hooks.json` runs generated hook commands for
+mechanical workflow evidence and checks around tool use through
+`.codex/hooks/workflow-evidence.sh`.
 
 ## Commands
 

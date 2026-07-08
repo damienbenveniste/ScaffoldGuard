@@ -23,6 +23,10 @@ AGENT_DESTINATIONS = {
     "CLAUDE.md",
     ".codex/config.toml",
     ".codex/hooks.json",
+    ".codex/agents/implementation-worker.toml",
+    ".codex/agents/docs-worker.toml",
+    ".codex/agents/reviewer.toml",
+    ".codex/hooks/workflow-evidence.sh",
     ".codex/rules/git.rules",
     ".codex/rules/validation.rules",
     ".claude/rules/python.md",
@@ -108,7 +112,7 @@ def _with_generated_marker(file: RenderedFile) -> RenderedFile:
             insert_at = second_delimiter + len("\n---\n")
             content = f"{content[:insert_at]}{GENERATED_MARKER}\n\n{content[insert_at:]}"
             return replace(file, content=content)
-    if file.path.suffix in {".rules", ".toml"}:
+    if file.path.suffix in {".rules", ".toml", ".sh"}:
         content = f"{GENERATED_COMMENT_MARKER}\n\n{content}"
     elif file.path == Path(".codex/hooks.json"):
         return file
@@ -134,7 +138,7 @@ def _refuse_manual_files(
 
 def _has_generated_marker(path: Path, content: str) -> bool:
     """Return whether content contains the generated marker for its file type."""
-    if path.suffix in {".rules", ".toml"}:
+    if path.suffix in {".rules", ".toml", ".sh"}:
         return GENERATED_COMMENT_MARKER in content
     if path == Path(".codex/hooks.json"):
         return GENERATED_JSON_MARKER in content

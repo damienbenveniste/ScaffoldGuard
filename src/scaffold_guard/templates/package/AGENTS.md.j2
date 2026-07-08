@@ -20,8 +20,9 @@ These rules apply to every code, documentation, and configuration change in this
 ## Delegation and External Context
 
 - Keep the main thread focused on decisions, edits, validation, and final synthesis.
-- Use subagents for bounded, read-only work that would otherwise clutter the main thread: broad codebase reconnaissance, test-failure triage, documentation review, compatibility research, or issue/PR summarization.
-- Give subagents a narrow question, explicit paths or commands, and the expected evidence format. Do not delegate final judgment, destructive actions, secret handling, or broad edits.
+- For non-trivial implementation work, use worker subagents when available and assign concrete files, modules, templates, docs, tests, or configuration ownership before substantial local edits.
+- Use read-only subagents for bounded work that would otherwise clutter the main thread: broad codebase reconnaissance, test-failure triage, documentation review, compatibility research, or issue/PR summarization.
+- Give subagents a narrow brief with explicit paths, ownership, expected output, and recommended validation. Do not delegate final judgment, destructive actions, secret handling, or release decisions.
 - Treat subagent output as evidence to verify, not as authoritative truth. The primary agent owns all edits and completion claims.
 - Use MCP servers when available for current external context: repository hosting for issues, PRs, and CI; documentation/context servers for library APIs; browser tools for rendered UI checks; and read-only database or observability servers for diagnostics.
 - Keep MCP usage read-only unless the user explicitly asks for mutation. If an MCP server is unavailable, continue with repo-local evidence and state the limitation.

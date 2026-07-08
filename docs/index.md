@@ -10,8 +10,10 @@ Python, TypeScript, or mixed Python+TypeScript starter layouts.
 
 - `scaffold-guard init` for minimal guardrails, Python packages, TypeScript
   packages, or Python+TypeScript monorepos.
-- `AGENTS.md` plus `.codex/config.toml`, `.codex/hooks.json`, and
-  `.codex/rules/*.rules` when Codex is selected.
+- `AGENTS.md` behavioral guidance plus `.codex/config.toml` feature defaults,
+  `.codex/agents/*.toml` worker defaults, `.codex/rules/*.rules` command
+  permission policy, and `.codex/hooks.json` workflow checks when Codex is
+  selected.
 - `CLAUDE.md` plus `.claude/rules/*.md` when Claude Code is selected.
 - `.cursor/rules/*.mdc` when Cursor is selected.
 - `scaffold-guard check` for fast local policy checks.

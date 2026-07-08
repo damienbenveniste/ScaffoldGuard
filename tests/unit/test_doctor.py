@@ -133,6 +133,33 @@ def test_doctor_text_reports_successful_generated_project(
     assert "- scaffold-guard-config: ok" in result.output
 
 
+def test_doctor_reports_missing_codex_adapter_support_file(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor treats missing Codex support scripts as adapter failures."""
+    project_dir = generated_project(tmp_path, agent="codex")
+    (project_dir / ".codex/hooks/workflow-evidence.sh").unlink()
+
+    def fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    async def fake_run_git(git_path: str, root: Path) -> bool:
+        assert git_path == "/usr/bin/git"
+        assert root == project_dir
+        return True
+
+    monkeypatch.setattr("scaffold_guard.doctor.shutil.which", fake_which)
+    monkeypatch.setattr(doctor, "_run_git", fake_run_git)
+
+    report = run_doctor(project_dir)
+    checks = {check.id: check for check in report.checks}
+
+    assert not report.ok
+    assert not checks["codex-adapter"].ok
+
+
 def test_doctor_detects_invalid_pyproject(tmp_path: Path) -> None:
     """Doctor identifies parse errors before generated-project checks."""
     (tmp_path / "pyproject.toml").write_text("[project\n", encoding="utf-8")
