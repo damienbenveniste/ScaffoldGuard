@@ -177,6 +177,21 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
             message="AGENTS.md present." if (root / "AGENTS.md").exists() else "AGENTS.md missing.",
         ),
     ]
+    if config.codex:
+        codex_paths = (
+            Path(".codex/config.toml"),
+            Path(".codex/hooks.json"),
+            Path(".codex/rules/git.rules"),
+            Path(".codex/rules/validation.rules"),
+        )
+        checks.append(
+            DoctorCheck(
+                id="codex-adapter",
+                ok=all((root / path).exists() for path in codex_paths),
+                severity="error",
+                message="Codex adapter selected.",
+            )
+        )
     if config.profile == "python":
         checks.append(
             DoctorCheck(

@@ -37,7 +37,7 @@ configuration change in this repository.
 - Always generate `AGENTS.md` for scaffolded projects. Treat it as the shared
   cross-agent instruction source.
 - Keep adapter behavior explicit:
-  - Codex uses `AGENTS.md`.
+  - Codex uses `AGENTS.md` for behavior.
   - Claude Code uses `CLAUDE.md` as a wrapper that imports `AGENTS.md`, with
     optional `.claude/rules/`.
   - Cursor uses `.cursor/rules/*.mdc` plus `AGENTS.md`.
@@ -193,6 +193,11 @@ configuration change in this repository.
 
 - Keep `AGENTS.md` generation in the base scaffold because it is shared by every
   adapter.
+- When product scope supports Codex-specific adapter files, model Codex as a
+  layered structure: `AGENTS.md` defines agent behavior, `.codex/config.toml`
+  defines mode and permissions, `.codex/rules/*.rules` defines allowed,
+  prompted, and forbidden commands, and `.codex/hooks.json` defines checks that
+  run around tool use.
 - `CLAUDE.md` must not duplicate the full `AGENTS.md`; it should import or
   reference it and add only Claude-specific notes.
 - Cursor `.mdc` files must include valid frontmatter with `description`,

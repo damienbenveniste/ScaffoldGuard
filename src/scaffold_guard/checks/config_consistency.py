@@ -17,6 +17,13 @@ from scaffold_guard.checks.config import (
 REQUIRES_PYTHON = re.compile(r"requires-python\s*=\s*[\"']>=([^\"']+)[\"']")
 PYPROJECT_COVERAGE = re.compile(r"fail_under\s*=\s*(\d+)")
 VITEST_COVERAGE = re.compile(r"(?:branches|functions|lines|statements):\s*(\d+)")
+CODEX_ADAPTER_PATHS = (
+    Path("AGENTS.md"),
+    Path(".codex/config.toml"),
+    Path(".codex/hooks.json"),
+    Path(".codex/rules/git.rules"),
+    Path(".codex/rules/validation.rules"),
+)
 
 
 def check_config_consistency(root: Path) -> CheckResult:
@@ -60,15 +67,8 @@ def _check_agent_file_consistency(
     """Verify selected agent booleans match generated adapter files."""
     findings: list[CheckFinding] = []
     agent_table = _object_mapping(agents)
-    if bool_value(agent_table, "codex", default=True) and not (root / "AGENTS.md").exists():
-        findings.append(
-            finding(
-                "AGENTS.md",
-                line=0,
-                code="agent-config-mismatch",
-                message="scaffold-guard.toml enables Codex but AGENTS.md is missing.",
-            )
-        )
+    codex_enabled = bool_value(agent_table, "codex", default=True)
+    findings.extend(_check_codex_file_consistency(root, codex_enabled))
     if bool_value(agent_table, "claude", default=False) != (root / "CLAUDE.md").exists():
         findings.append(
             finding(
@@ -85,6 +85,33 @@ def _check_agent_file_consistency(
                 line=0,
                 code="agent-config-mismatch",
                 message="scaffold-guard.toml Cursor setting does not match .cursor/rules.",
+            )
+        )
+    return findings
+
+
+def _check_codex_file_consistency(root: Path, codex_enabled: bool) -> list[CheckFinding]:
+    """Verify Codex adapter files match the generated config flag."""
+    findings: list[CheckFinding] = []
+    missing_paths = tuple(path for path in CODEX_ADAPTER_PATHS if not (root / path).exists())
+    if codex_enabled:
+        findings.extend(
+            finding(
+                relative_path,
+                line=0,
+                code="agent-config-mismatch",
+                message=f"scaffold-guard.toml enables Codex but {relative_path} is missing.",
+            )
+            for relative_path in missing_paths
+        )
+        return findings
+    if any((root / path).exists() for path in CODEX_ADAPTER_PATHS if path != Path("AGENTS.md")):
+        findings.append(
+            finding(
+                ".codex",
+                line=0,
+                code="agent-config-mismatch",
+                message="scaffold-guard.toml disables Codex but .codex adapter files exist.",
             )
         )
     return findings

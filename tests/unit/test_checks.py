@@ -78,6 +78,27 @@ def test_config_helpers_default_when_config_missing(tmp_path: Path) -> None:
     assert table_value({"project": "not-table"}, "project") == {}
 
 
+def test_project_health_handles_missing_generated_config(tmp_path: Path) -> None:
+    """Project health reports base missing paths when generated config is absent."""
+    result = check_project_health(tmp_path)
+    paths = {finding.path for finding in result.findings}
+
+    assert not result.ok
+    assert {"AGENTS.md", "scaffold-guard.toml"}.issubset(paths)
+    assert ".codex/config.toml" not in paths
+
+
+def test_project_health_ignores_codex_adapter_when_codex_is_disabled(tmp_path: Path) -> None:
+    """Codex-specific health checks follow the generated adapter flag."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(project_dir / "scaffold-guard.toml", "codex = true", "codex = false")
+    (project_dir / ".codex/config.toml").unlink()
+
+    result = check_project_health(project_dir)
+
+    assert result.ok
+
+
 def test_tool_enabled_reads_mode_aware_python_tool_config(tmp_path: Path) -> None:
     """Mode-aware Python tool settings control generated checks."""
     project_dir = _generated_project(
@@ -326,6 +347,40 @@ def test_project_health_detects_missing_agents_file(tmp_path: Path) -> None:
     assert any(finding.path == "AGENTS.md" for finding in result.findings)
 
 
+def test_project_health_detects_missing_codex_adapter_file(tmp_path: Path) -> None:
+    """Codex-enabled projects require the generated Codex adapter files."""
+    project_dir = _generated_project(tmp_path)
+    (project_dir / ".codex/config.toml").unlink()
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(finding.path == ".codex/config.toml" for finding in result.findings)
+
+
+def test_project_health_detects_missing_codex_rules_directory(tmp_path: Path) -> None:
+    """Codex-enabled projects require generated command rules."""
+    project_dir = _generated_project(tmp_path)
+    _remove_tree(project_dir / ".codex/rules")
+
+    result = check_project_health(project_dir)
+    paths = {finding.path for finding in result.findings}
+
+    assert not result.ok
+    assert {".codex/rules/git.rules", ".codex/rules/validation.rules"}.issubset(paths)
+
+
+def test_project_health_detects_invalid_codex_rule_extension(tmp_path: Path) -> None:
+    """Codex command rule files must use `.rules`."""
+    project_dir = _generated_project(tmp_path)
+    (project_dir / ".codex/rules/not-a-rule.txt").write_text("prefix_rule(\n)\n", encoding="utf-8")
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(finding.code == "codex-rule-extension" for finding in result.findings)
+
+
 def test_project_health_respects_disabled_docs_and_ci(tmp_path: Path) -> None:
     """Docs and CI paths are not required when disabled in config."""
     project_dir = _generated_project(tmp_path)
@@ -494,6 +549,82 @@ def test_generated_files_detects_cursor_metadata_problems(tmp_path: Path) -> Non
     assert {"cursor-rule-frontmatter", "cursor-rule-metadata"}.issubset(codes)
 
 
+def test_generated_files_detects_codex_rule_and_hook_problems(tmp_path: Path) -> None:
+    """Generated Codex rules and hooks need conservative machine-readable shapes."""
+    project_dir = _generated_project(tmp_path)
+    (project_dir / ".codex/rules/bad.txt").write_text("prefix_rule(\n)\n", encoding="utf-8")
+    (project_dir / ".codex/rules/git.rules").write_text(
+        "# Missing command rules\n", encoding="utf-8"
+    )
+    (project_dir / ".codex/hooks.json").write_text('{"hooks": {}}\n', encoding="utf-8")
+
+    result = check_generated_files(project_dir)
+    codes = {finding.code for finding in result.findings}
+
+    assert {
+        "codex-rule-extension",
+        "codex-rule-missing-prefix-rule",
+        "codex-hooks-missing-policy-check",
+    }.issubset(codes)
+
+
+def test_generated_files_allows_missing_or_nested_codex_rules(tmp_path: Path) -> None:
+    """Generated-file content checks skip absent rule directories and non-file entries."""
+    project_dir = _generated_project(tmp_path)
+    _remove_tree(project_dir / ".codex/rules")
+
+    missing_rules_result = check_generated_files(project_dir)
+
+    assert missing_rules_result.ok
+
+    (project_dir / ".codex/rules/nested.rules").mkdir(parents=True)
+    nested_entry_result = check_generated_files(project_dir)
+
+    assert nested_entry_result.ok
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_code"),
+    [
+        ("{not-json", "codex-hooks-json"),
+        ("[]", "codex-hooks-shape"),
+        ("{}", "codex-hooks-shape"),
+        ('{"hooks": []}', "codex-hooks-shape"),
+        ('{"hooks": {"PostToolUse": "not-list"}}', "codex-hooks-missing-policy-check"),
+        ('{"hooks": {"PostToolUse": ["not-object"]}}', "codex-hooks-missing-policy-check"),
+        (
+            '{"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": []}]}}',
+            "codex-hooks-missing-policy-check",
+        ),
+        (
+            '{"hooks": {"PostToolUse": [{"matcher": "apply_patch", "hooks": "not-list"}]}}',
+            "codex-hooks-missing-policy-check",
+        ),
+        (
+            '{"hooks": {"PostToolUse": [{"matcher": "apply_patch", "hooks": ["not-object"]}]}}',
+            "codex-hooks-missing-policy-check",
+        ),
+        (
+            '{"hooks": {"PostToolUse": [{"matcher": "apply_patch", "hooks": [{"command": 123}]}]}}',
+            "codex-hooks-missing-policy-check",
+        ),
+    ],
+)
+def test_generated_files_detects_invalid_codex_hook_shapes(
+    tmp_path: Path,
+    payload: str,
+    expected_code: str,
+) -> None:
+    """Codex hook checks reject malformed JSON and unsafe event shapes."""
+    project_dir = _generated_project(tmp_path)
+    (project_dir / ".codex/hooks.json").write_text(f"{payload}\n", encoding="utf-8")
+
+    result = check_generated_files(project_dir)
+
+    assert not result.ok
+    assert any(finding.code == expected_code for finding in result.findings)
+
+
 def test_generated_files_detects_missing_readme_toolchain_and_ci_tools(tmp_path: Path) -> None:
     """Generated README and CI files must retain expected toolchain commands."""
     project_dir = _generated_project(tmp_path)
@@ -643,11 +774,24 @@ def test_config_consistency_detects_codex_mismatch(tmp_path: Path) -> None:
     """Codex-enabled config requires AGENTS.md."""
     project_dir = _generated_project(tmp_path)
     (project_dir / "AGENTS.md").unlink()
+    (project_dir / ".codex/hooks.json").unlink()
 
     result = check_config_consistency(project_dir)
 
     assert not result.ok
     assert any(finding.path == "AGENTS.md" for finding in result.findings)
+    assert any(finding.path == ".codex/hooks.json" for finding in result.findings)
+
+
+def test_config_consistency_detects_disabled_codex_with_adapter_files(tmp_path: Path) -> None:
+    """Codex-disabled config must not keep generated `.codex` adapter files."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(project_dir / "scaffold-guard.toml", "codex = true", "codex = false")
+
+    result = check_config_consistency(project_dir)
+
+    assert not result.ok
+    assert any(finding.path == ".codex" for finding in result.findings)
 
 
 def test_config_consistency_detects_python_and_coverage_mismatch(tmp_path: Path) -> None:

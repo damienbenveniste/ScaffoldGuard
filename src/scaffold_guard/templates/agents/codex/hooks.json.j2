@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'start=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; root=\"$start\"; while [ \"$root\" != \"/\" ] && [ ! -f \"$root/scaffold-guard.toml\" ]; do root=\"$(dirname \"$root\")\"; done; if [ ! -f \"$root/scaffold-guard.toml\" ]; then root=\"$start\"; fi; scaffold-guard check --path \"$root\"'",
+            "timeout": 120,
+            "statusMessage": "scaffold-guard generated: checking project policy after file edits"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -121,6 +121,10 @@ The default `minimal` profile creates guardrails only:
 ```text
 my_project/
   AGENTS.md
+  .codex/config.toml
+  .codex/hooks.json
+  .codex/rules/git.rules
+  .codex/rules/validation.rules
   README.md
   LICENSE
   scaffold-guard.toml
@@ -184,12 +188,17 @@ my_project/
 
 Adapter files are added according to `--agent`:
 
-| Agent | Generated instruction files |
+| Agent | Generated files |
 |---|---|
-| `codex` | `AGENTS.md` |
+| `codex` | `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.codex/rules/*.rules` |
 | `claude` | `AGENTS.md`, `CLAUDE.md`, `.claude/rules/*.md` |
 | `cursor` | `AGENTS.md`, `.cursor/rules/*.mdc` |
 | `all` | all of the above |
+
+For Codex, `AGENTS.md` describes how agents should behave, `.codex/config.toml`
+sets project mode and permissions, `.codex/rules/*.rules` defines allowed,
+prompted, and forbidden command prefixes, and `.codex/hooks.json` runs generated
+checks around tool use.
 
 ## Commands
 
@@ -236,9 +245,8 @@ uv build
 ## Limitations
 
 V1 is a developer CLI, not a SaaS product or policy server. It does not include
-telemetry, external AI calls, Codex or Claude hooks, a plugin system, Homebrew
+telemetry, external AI calls, Claude hooks, a plugin system, Homebrew
 automation, or automatic upgrades for mature existing repositories.
 
-Homebrew distribution, hook starter templates, more specialized project profiles, and richer
-policy configuration are intentionally deferred until after the PyPI package is
-stable.
+Homebrew distribution, more specialized project profiles, and richer policy
+configuration are intentionally deferred until after the PyPI package is stable.

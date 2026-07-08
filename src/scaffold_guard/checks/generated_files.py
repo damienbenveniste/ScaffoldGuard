@@ -1,6 +1,9 @@
 """Checks for generated file content."""
 
+import json
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
 from scaffold_guard.checks.config import (
@@ -14,6 +17,7 @@ from scaffold_guard.checks.files import iter_text_files, read_lines, relative_to
 AGENT_FILE_PATHS = (
     Path("AGENTS.md"),
     Path("CLAUDE.md"),
+    Path(".codex"),
     Path(".claude/rules"),
     Path(".cursor/rules"),
 )
@@ -39,6 +43,8 @@ def check_generated_files(root: Path) -> CheckResult:
     """Verify generated files do not contain unresolved template or format issues."""
     findings: list[CheckFinding] = []
     findings.extend(_check_unresolved_agent_placeholders(root))
+    findings.extend(_check_codex_rules(root))
+    findings.extend(_check_codex_hooks(root))
     findings.extend(_check_cursor_frontmatter(root))
     findings.extend(_check_readme_mentions_uv(root))
     findings.extend(_check_ci_workflow(root))
@@ -61,6 +67,113 @@ def _check_unresolved_agent_placeholders(root: Path) -> list[CheckFinding]:
                     )
                 )
     return findings
+
+
+def _check_codex_rules(root: Path) -> list[CheckFinding]:
+    """Check Codex project rules use `.rules` files with prefix rules."""
+    rules_dir = root / ".codex/rules"
+    if not rules_dir.exists():
+        return []
+    findings: list[CheckFinding] = []
+    for path in sorted(rules_dir.iterdir()):
+        if not path.is_file():
+            continue
+        relative_path = path.relative_to(root)
+        if path.suffix != ".rules":
+            findings.append(
+                finding(
+                    relative_path,
+                    line=0,
+                    code="codex-rule-extension",
+                    message="Codex command rules must use the .rules extension.",
+                )
+            )
+            continue
+        content = path.read_text(encoding="utf-8", errors="replace")
+        if "prefix_rule(" not in content:
+            findings.append(
+                finding(
+                    relative_path,
+                    line=1,
+                    code="codex-rule-missing-prefix-rule",
+                    message="Codex command rules must define at least one prefix_rule.",
+                )
+            )
+    return findings
+
+
+def _check_codex_hooks(root: Path) -> list[CheckFinding]:
+    """Check Codex hooks use the documented JSON hook shape."""
+    hooks_path = root / ".codex/hooks.json"
+    if not hooks_path.exists():
+        return []
+    relative_path = Path(".codex/hooks.json")
+    try:
+        payload: object = json.loads(hooks_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return [
+            finding(
+                relative_path,
+                line=exc.lineno,
+                code="codex-hooks-json",
+                message="Codex hooks must be valid JSON.",
+            )
+        ]
+    if not isinstance(payload, Mapping):
+        return [
+            finding(
+                relative_path,
+                line=1,
+                code="codex-hooks-shape",
+                message="Codex hooks must be a JSON object.",
+            )
+        ]
+    hook_config = cast("Mapping[str, object]", payload)
+    hooks = hook_config.get("hooks")
+    if not isinstance(hooks, Mapping):
+        return [
+            finding(
+                relative_path,
+                line=1,
+                code="codex-hooks-shape",
+                message="Codex hooks must contain a hooks object.",
+            )
+        ]
+    if not _has_scaffold_guard_post_tool_use(cast("Mapping[str, object]", hooks)):
+        return [
+            finding(
+                relative_path,
+                line=1,
+                code="codex-hooks-missing-policy-check",
+                message="Codex hooks must run scaffold-guard check after file-edit tool use.",
+            )
+        ]
+    return []
+
+
+def _has_scaffold_guard_post_tool_use(hooks: Mapping[str, object]) -> bool:
+    """Return whether PostToolUse runs `scaffold-guard check` after edits."""
+    groups = hooks.get("PostToolUse")
+    if not isinstance(groups, list):
+        return False
+    for group in cast("list[object]", groups):
+        if not isinstance(group, Mapping):
+            continue
+        group_mapping = cast("Mapping[str, object]", group)
+        matcher = group_mapping.get("matcher")
+        if not isinstance(matcher, str) or "apply_patch" not in matcher:
+            continue
+        handlers = group_mapping.get("hooks")
+        if not isinstance(handlers, list):
+            continue
+        for handler in cast("list[object]", handlers):
+            if not isinstance(handler, Mapping):
+                continue
+            handler_mapping = cast("Mapping[str, object]", handler)
+            command = handler_mapping.get("command")
+            if isinstance(command, str) and "scaffold-guard check" in command:
+                return True
+    return False
 
 
 def _check_cursor_frontmatter(root: Path) -> list[CheckFinding]:

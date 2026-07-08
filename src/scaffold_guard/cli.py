@@ -211,7 +211,9 @@ def _print_init_summary(
         typer.echo(f"  - {file_path.as_posix()}")
     typer.echo()
     typer.echo("Agent adapters:")
-    typer.echo("  - Codex: AGENTS.md")
+    typer.echo(
+        "  - Codex: AGENTS.md + .codex/config.toml + .codex/rules/*.rules + .codex/hooks.json"
+    )
     if agent in {AgentOption.CLAUDE, AgentOption.ALL}:
         typer.echo("  - Claude Code: CLAUDE.md + .claude/rules/")
     if agent in {AgentOption.CURSOR, AgentOption.ALL}:

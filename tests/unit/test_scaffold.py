@@ -1,5 +1,9 @@
 """Tests for scaffold file planning and writes."""
 
+import asyncio
+import json
+import os
+import shlex
 from dataclasses import replace
 from pathlib import Path
 
@@ -174,8 +178,13 @@ def test_package_template_specs_include_selected_adapters(tmp_path: Path) -> Non
     all_destinations = {spec.destination for spec in package_template_specs(all_options)}
 
     assert "AGENTS.md" in codex_destinations
+    assert ".codex/config.toml" in codex_destinations
+    assert ".codex/hooks.json" in codex_destinations
+    assert ".codex/rules/git.rules" in codex_destinations
+    assert ".codex/rules/validation.rules" in codex_destinations
     assert "CLAUDE.md" not in codex_destinations
     assert ".cursor/rules/python.mdc" not in codex_destinations
+    assert ".codex/config.toml" in all_destinations
     assert "CLAUDE.md" in all_destinations
     assert ".claude/rules/python.md" in all_destinations
     assert ".cursor/rules/python.mdc" in all_destinations
@@ -191,6 +200,7 @@ def test_typescript_template_specs_filter_python_adapter_rules(tmp_path: Path) -
     assert "tsconfig.json" in destinations
     assert ".claude/rules/typescript.md" in destinations
     assert ".cursor/rules/typescript.mdc" in destinations
+    assert ".codex/rules/validation.rules" in destinations
     assert ".claude/rules/python.md" not in destinations
     assert ".cursor/rules/python.mdc" not in destinations
     assert "pyproject.toml" not in destinations
@@ -228,6 +238,7 @@ def test_monorepo_template_specs_include_python_and_typescript_rules(tmp_path: P
     assert ".claude/rules/typescript.md" in destinations
     assert ".cursor/rules/python.mdc" in destinations
     assert ".cursor/rules/typescript.mdc" in destinations
+    assert ".codex/rules/validation.rules" in destinations
 
 
 def test_monorepo_template_specs_omit_disabled_typescript_tool_files(tmp_path: Path) -> None:
@@ -295,6 +306,47 @@ def test_render_package_files_derives_python_tool_versions_from_python_min(
     assert 'requires-python = ">=3.14"' in pyproject
     assert 'target-version = "py314"' in pyproject
     assert 'python_version = "3.14"' in pyproject
+
+
+def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Path) -> None:
+    """Codex adapter files are deterministic and profile-aware."""
+    rendered_files = render_package_files(
+        _init_options(tmp_path, agent="codex", profile="monorepo")
+    )
+    rendered_by_path = {rendered_file.path: rendered_file for rendered_file in rendered_files}
+    hooks = rendered_by_path[Path(".codex/hooks.json")].content
+    rules = rendered_by_path[Path(".codex/rules/validation.rules")].content
+
+    assert '"PostToolUse"' in hooks
+    assert "git rev-parse --show-toplevel" in hooks
+    assert 'scaffold-guard.toml\\" ]; do root=' in hooks
+    assert 'scaffold-guard check --path \\"$root\\"' in hooks
+    assert 'pattern = ["uv", "run", "ruff", "check", "packages/python"]' in rules
+    assert 'pattern = ["npm", "run", "ts:typecheck"]' in rules
+
+
+def test_codex_hook_command_resolves_non_git_subdirectory_root(tmp_path: Path) -> None:
+    """The generated hook command climbs to project root when git is unavailable."""
+    project_dir = tmp_path / "demo"
+    subdir = project_dir / "src"
+    fake_bin = tmp_path / "bin"
+    subdir.mkdir(parents=True)
+    fake_bin.mkdir()
+    (project_dir / "scaffold-guard.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    fake_scaffold_guard = fake_bin / "scaffold-guard"
+    fake_scaffold_guard.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake_scaffold_guard.chmod(0o755)
+
+    rendered_files = render_package_files(_init_options(tmp_path, agent="codex"))
+    hooks = next(file.content for file in rendered_files if file.path == Path(".codex/hooks.json"))
+    hook_payload = json.loads(hooks)
+    hook_command = hook_payload["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+
+    stdout = asyncio.run(_run_command_stdout(hook_command, cwd=subdir, env=env))
+
+    assert stdout.splitlines() == ["check", "--path", str(project_dir)]
 
 
 def test_render_package_files_rejects_invalid_python_min_for_ruff_target(
@@ -498,3 +550,17 @@ def _init_options(
         biome=typescript_tools[0],
         vitest=typescript_tools[1],
     )
+
+
+async def _run_command_stdout(command: str, *, cwd: Path, env: dict[str, str]) -> str:
+    """Run a generated shell command and return stdout."""
+    process = await asyncio.create_subprocess_exec(
+        *shlex.split(command),
+        cwd=cwd,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    assert process.returncode == 0, stderr.decode("utf-8", errors="replace")
+    return stdout.decode("utf-8", errors="replace")

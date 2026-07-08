@@ -20,6 +20,12 @@ SUCCESS = 0
 CONFIG_ERROR = 2
 FULL_COVERAGE = 100
 
+CODEX_ADAPTER_FILES = {
+    Path(".codex/config.toml"),
+    Path(".codex/hooks.json"),
+    Path(".codex/rules/git.rules"),
+    Path(".codex/rules/validation.rules"),
+}
 BASE_PACKAGE_FILES = {
     Path("AGENTS.md"),
     Path("README.md"),
@@ -38,7 +44,7 @@ BASE_PACKAGE_FILES = {
     Path("tests/unit/test_core.py"),
     Path("tests/integration/test_import_package.py"),
     Path("scaffold-guard.toml"),
-}
+} | CODEX_ADAPTER_FILES
 BASE_PACKAGE_GITLAB_FILES = (
     BASE_PACKAGE_FILES - {Path(".github/workflows/ci.yml"), Path(".github/workflows/docs.yml")}
 ) | {Path(".gitlab-ci.yml")}
@@ -49,7 +55,7 @@ BASE_MINIMAL_FILES = {
     Path(".gitignore"),
     Path(".github/workflows/ci.yml"),
     Path("scaffold-guard.toml"),
-}
+} | CODEX_ADAPTER_FILES
 BASE_MINIMAL_GITLAB_FILES = (BASE_MINIMAL_FILES - {Path(".github/workflows/ci.yml")}) | {
     Path(".gitlab-ci.yml")
 }
@@ -67,7 +73,7 @@ BASE_TYPESCRIPT_FILES = {
     Path("src/index.ts"),
     Path("tests/index.test.ts"),
     Path("scaffold-guard.toml"),
-}
+} | CODEX_ADAPTER_FILES
 BASE_MONOREPO_FILES = {
     Path("AGENTS.md"),
     Path("README.md"),
@@ -91,7 +97,7 @@ BASE_MONOREPO_FILES = {
     Path("packages/typescript/src/index.ts"),
     Path("packages/typescript/tests/index.test.ts"),
     Path("scaffold-guard.toml"),
-}
+} | CODEX_ADAPTER_FILES
 
 
 class GreetingPackage(Protocol):
@@ -106,7 +112,7 @@ def test_init_codex_generates_valid_package_tree(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The codex adapter creates a base package tree with only AGENTS.md."""
+    """The codex adapter creates a base package tree with Codex project files."""
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(app, ["init", "demo", "--profile", "python", "--agent", "codex"])

@@ -374,6 +374,7 @@ def _is_agent_rule_file(path: Path) -> bool:
     """Return whether a path is an agent instruction file."""
     return (
         path in {Path("AGENTS.md"), Path("CLAUDE.md")}
+        or path.parts[0:1] == (".codex",)
         or path.parts[0:2] == (".cursor", "rules")
         or path.parts[0:2] == (".claude", "rules")
     )

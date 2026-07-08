@@ -5,6 +5,10 @@ The default `minimal` profile creates guardrails without package folders:
 ```text
 my_project/
   AGENTS.md
+  .codex/config.toml
+  .codex/hooks.json
+  .codex/rules/git.rules
+  .codex/rules/validation.rules
   README.md
   LICENSE
   .gitignore
@@ -37,13 +41,27 @@ my_project/
   tests/integration/test_import_package.py
 ```
 
-Depending on `--agent`, the scaffold also includes:
+All generated projects include `AGENTS.md`. Depending on `--agent`, the scaffold
+also includes:
 
 ```text
+# codex
+.codex/config.toml
+.codex/hooks.json
+.codex/rules/git.rules
+.codex/rules/validation.rules
+
+# claude
 CLAUDE.md
 .claude/rules/*.md
+
+# cursor
 .cursor/rules/*.mdc
 ```
+
+The Codex files are layered: `AGENTS.md` defines behavior, `.codex/config.toml`
+sets project mode and permissions, `.codex/rules/*.rules` defines command
+policy, and `.codex/hooks.json` runs generated checks around tool use.
 
 The `typescript` profile creates a TypeScript package with npm scripts,
 TypeScript, configurable compiler strictness, optional Biome, optional Vitest,

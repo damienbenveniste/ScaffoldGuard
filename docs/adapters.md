@@ -2,9 +2,17 @@
 
 ## Codex
 
-Codex uses `AGENTS.md` as the generated shared instruction file. The `codex`
-adapter creates no additional agent files because the base scaffold always
-includes `AGENTS.md`.
+Codex uses a layered project adapter:
+
+- `AGENTS.md` defines shared behavior and repository operating rules.
+- `.codex/config.toml` sets project mode and permissions after the project is
+  trusted.
+- `.codex/rules/*.rules` defines allowed, prompted, and forbidden command
+  prefixes.
+- `.codex/hooks.json` runs generated checks around tool use.
+
+The `codex` adapter currently generates `.codex/rules/git.rules` and
+`.codex/rules/validation.rules`.
 
 ## Claude Code
 
@@ -33,7 +41,8 @@ Claude rules.
 Instruction files guide agents, but they do not enforce behavior. Generated
 projects use `scaffold-guard check`, strict local tooling, and the selected CI
 provider to catch risky patterns such as type suppressions, unresolved
-templates, missing adapter files, and mismatched configuration.
+templates, missing adapter files, malformed Codex rules or hooks, and
+mismatched configuration.
 
 ## Guidance Included
 

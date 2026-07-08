@@ -42,14 +42,16 @@ Monorepos require both `packages/python/` and `packages/typescript/`.
 ### generated-files
 
 Checks generated instruction and support files for unresolved template
-placeholders, valid Cursor frontmatter, README toolchain commands, and CI
-commands for the enabled profile and toolchain.
+placeholders, valid Cursor frontmatter, Codex `.rules` files, Codex hook shape,
+README toolchain commands, and CI commands for the enabled profile and
+toolchain.
 
 ### config-consistency
 
 Compares `scaffold-guard.toml` against generated files and package configuration.
-It detects agent adapter mismatches, Python version mismatches, coverage
-mismatches, and stale lockfiles when a lockfile exists.
+It detects agent adapter mismatches, including missing Codex `.codex` files,
+Python version mismatches, coverage mismatches, and stale lockfiles when a
+lockfile exists.
 
 ## JSON Output
 
