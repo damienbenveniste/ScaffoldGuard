@@ -14,23 +14,23 @@ from scaffold_guard.checks.config import (
 )
 from scaffold_guard.checks.files import iter_text_files, read_lines, relative_to_root
 
-AGENT_FILE_PATHS = (
+AGENT_FILE_PATHS: tuple[Path, ...] = (
     Path("AGENTS.md"),
     Path("CLAUDE.md"),
     Path(".codex"),
     Path(".claude/rules"),
     Path(".cursor/rules"),
 )
-PACKAGE_BASE_CI_TOKENS = ("uv sync", "pytest", "mkdocs")
-MINIMAL_CI_TOKENS = ("uv tool install scaffold-guard", "scaffold-guard check")
-TYPESCRIPT_CI_TOKENS = (
+PACKAGE_BASE_CI_TOKENS: tuple[str, ...] = ("uv sync", "pytest", "mkdocs")
+MINIMAL_CI_TOKENS: tuple[str, ...] = ("uv tool install scaffold-guard", "scaffold-guard check")
+TYPESCRIPT_CI_TOKENS: tuple[str, ...] = (
     "uv tool install scaffold-guard",
     "npm install",
     "npm run typecheck",
     "npm run build",
     "scaffold-guard check",
 )
-MONOREPO_CI_TOKENS = (
+MONOREPO_CI_TOKENS: tuple[str, ...] = (
     "uv sync",
     "pytest",
     "npm install",

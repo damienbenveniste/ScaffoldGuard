@@ -14,7 +14,7 @@ from scaffold_guard.checks.config import (
     tool_enabled,
 )
 
-CODEX_ADAPTER_PATHS = (
+CODEX_ADAPTER_PATHS: tuple[Path, ...] = (
     Path(".codex/config.toml"),
     Path(".codex/hooks.json"),
     Path(".codex/agents/implementation-worker.toml"),

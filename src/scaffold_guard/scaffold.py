@@ -9,7 +9,7 @@ from pathlib import Path
 from scaffold_guard.adapters import adapters_for
 from scaffold_guard.fs import ensure_relative_safe_path, is_within_directory, write_text_safely
 from scaffold_guard.models import (
-    CANONICAL_PROFILES,
+    SUPPORTED_PROFILES,
     AgentChoice,
     CiChoice,
     InitOptions,
@@ -24,12 +24,11 @@ from scaffold_guard.models import (
 )
 from scaffold_guard.renderer import TemplateRenderer
 
-PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
-PYTHON_MINOR_VERSION_PATTERN = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)$")
-SUPPORTED_PROFILES = CANONICAL_PROFILES | {"package"}
+PROJECT_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+PYTHON_MINOR_VERSION_PATTERN: re.Pattern[str] = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)$")
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
-PACKAGE_BASE_TEMPLATE_SPECS = (
+PACKAGE_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("package/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("package/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
@@ -48,23 +47,27 @@ PACKAGE_BASE_TEMPLATE_SPECS = (
         "tests/integration/test_import_package.py",
     ),
 )
-PACKAGE_GITHUB_TEMPLATE_SPECS = (
+PACKAGE_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("package/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
     TemplateSpec("package/github/workflows/docs.yml.j2", ".github/workflows/docs.yml"),
 )
-PACKAGE_GITLAB_TEMPLATE_SPECS = (TemplateSpec("package/gitlab-ci.yml.j2", ".gitlab-ci.yml"),)
-MINIMAL_BASE_TEMPLATE_SPECS = (
+PACKAGE_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
+    TemplateSpec("package/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+)
+MINIMAL_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("minimal/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("minimal/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
     TemplateSpec("minimal/gitignore.j2", ".gitignore"),
     TemplateSpec("minimal/scaffold-guard.toml.j2", "scaffold-guard.toml"),
 )
-MINIMAL_GITHUB_TEMPLATE_SPECS = (
+MINIMAL_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("minimal/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
-MINIMAL_GITLAB_TEMPLATE_SPECS = (TemplateSpec("minimal/gitlab-ci.yml.j2", ".gitlab-ci.yml"),)
-TYPESCRIPT_BASE_TEMPLATE_SPECS = (
+MINIMAL_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
+    TemplateSpec("minimal/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+)
+TYPESCRIPT_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("typescript/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("typescript/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
@@ -78,11 +81,13 @@ TYPESCRIPT_BASE_TEMPLATE_SPECS = (
     TemplateSpec("typescript/src/index.ts.j2", "src/index.ts"),
     TemplateSpec("typescript/tests/index.test.ts.j2", "tests/index.test.ts"),
 )
-TYPESCRIPT_GITHUB_TEMPLATE_SPECS = (
+TYPESCRIPT_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("typescript/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
-TYPESCRIPT_GITLAB_TEMPLATE_SPECS = (TemplateSpec("typescript/gitlab-ci.yml.j2", ".gitlab-ci.yml"),)
-MONOREPO_BASE_TEMPLATE_SPECS = (
+TYPESCRIPT_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
+    TemplateSpec("typescript/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+)
+MONOREPO_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("monorepo/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("monorepo/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
@@ -136,10 +141,12 @@ MONOREPO_BASE_TEMPLATE_SPECS = (
         "packages/typescript/tests/index.test.ts",
     ),
 )
-MONOREPO_GITHUB_TEMPLATE_SPECS = (
+MONOREPO_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("monorepo/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
-MONOREPO_GITLAB_TEMPLATE_SPECS = (TemplateSpec("monorepo/gitlab-ci.yml.j2", ".gitlab-ci.yml"),)
+MONOREPO_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
+    TemplateSpec("monorepo/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+)
 
 
 @dataclass(frozen=True, slots=True)

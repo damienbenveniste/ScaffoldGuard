@@ -16,13 +16,16 @@ from scaffold_guard.checks.config import (
 )
 from scaffold_guard.models import normalize_profile_choice
 
-PUBLIC_SYMBOL = re.compile(r"^(?:def|class)\s+([A-Za-z][A-Za-z0-9_]*)\b", flags=re.MULTILINE)
-PUBLIC_TYPESCRIPT_SYMBOL = re.compile(
+PUBLIC_SYMBOL: re.Pattern[str] = re.compile(
+    r"^(?:def|class)\s+([A-Za-z][A-Za-z0-9_]*)\b",
+    flags=re.MULTILINE,
+)
+PUBLIC_TYPESCRIPT_SYMBOL: re.Pattern[str] = re.compile(
     r"^export\s+(?:async\s+)?(?:function|class|const|let|interface|type|enum)\s+"
     r"([A-Za-z][A-Za-z0-9_]*)\b",
     flags=re.MULTILINE,
 )
-GIT_NOT_FOUND = 127
+GIT_NOT_FOUND: int = 127
 
 
 class DiffInspectionError(ValueError):

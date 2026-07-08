@@ -13,7 +13,7 @@ from scaffold_guard.checks.config import (
     table_value,
 )
 from scaffold_guard.models import (
-    CANONICAL_PROFILES,
+    SUPPORTED_PROFILES,
     AgentChoice,
     CiChoice,
     InitOptions,
@@ -25,7 +25,6 @@ from scaffold_guard.models import (
     profile_includes_typescript,
 )
 
-SUPPORTED_PROFILES = CANONICAL_PROFILES | {"package"}
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
 

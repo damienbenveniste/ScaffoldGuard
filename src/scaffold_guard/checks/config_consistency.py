@@ -14,10 +14,10 @@ from scaffold_guard.checks.config import (
     table_value,
 )
 
-REQUIRES_PYTHON = re.compile(r"requires-python\s*=\s*[\"']>=([^\"']+)[\"']")
-PYPROJECT_COVERAGE = re.compile(r"fail_under\s*=\s*(\d+)")
-VITEST_COVERAGE = re.compile(r"(?:branches|functions|lines|statements):\s*(\d+)")
-CODEX_ADAPTER_PATHS = (
+REQUIRES_PYTHON: re.Pattern[str] = re.compile(r"requires-python\s*=\s*[\"']>=([^\"']+)[\"']")
+PYPROJECT_COVERAGE: re.Pattern[str] = re.compile(r"fail_under\s*=\s*(\d+)")
+VITEST_COVERAGE: re.Pattern[str] = re.compile(r"(?:branches|functions|lines|statements):\s*(\d+)")
+CODEX_ADAPTER_PATHS: tuple[Path, ...] = (
     Path("AGENTS.md"),
     Path(".codex/config.toml"),
     Path(".codex/hooks.json"),

@@ -3,21 +3,25 @@
 from collections.abc import Iterable
 from pathlib import Path
 
-TEXT_SUFFIXES = {".json", ".md", ".mdc", ".py", ".toml", ".ts", ".tsx", ".yaml", ".yml"}
-IGNORED_DIRS = {
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
-    "__pycache__",
-    "build",
-    "coverage",
-    "dist",
-    "htmlcov",
-    "node_modules",
-    "site",
-}
+TEXT_SUFFIXES: frozenset[str] = frozenset(
+    (".json", ".md", ".mdc", ".py", ".toml", ".ts", ".tsx", ".yaml", ".yml")
+)
+IGNORED_DIRS: frozenset[str] = frozenset(
+    (
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "build",
+        "coverage",
+        "dist",
+        "htmlcov",
+        "node_modules",
+        "site",
+    )
+)
 
 
 def relative_to_root(root: Path, path: Path) -> Path:

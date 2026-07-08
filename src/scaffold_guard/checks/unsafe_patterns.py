@@ -14,7 +14,7 @@ from scaffold_guard.checks.files import (
     relative_to_root,
 )
 
-SCAN_PATHS = (
+SCAN_PATHS: tuple[Path, ...] = (
     Path("src"),
     Path("tests"),
     Path("packages"),
@@ -37,7 +37,7 @@ class LinePattern:
     policy_key: str | None = None
 
 
-LINE_PATTERNS = (
+LINE_PATTERNS: tuple[LinePattern, ...] = (
     LinePattern(
         "# type: ignore",
         "no-type-ignore",
@@ -102,13 +102,20 @@ LINE_PATTERNS = (
         "Do not commit AWS secret key literals.",
     ),
 )
-TYPING_ANY_IMPORT = re.compile(r"from\s+typing\s+import\s+.*\bAny\b|import\s+typing\s+as\s+typing")
-TYPESCRIPT_ANY = re.compile(
+TYPING_ANY_IMPORT: re.Pattern[str] = re.compile(
+    r"from\s+typing\s+import\s+.*\bAny\b|import\s+typing\s+as\s+typing"
+)
+TYPESCRIPT_ANY: re.Pattern[str] = re.compile(
     r"(?::\s*any\b|\bas\s+any\b|[A-Za-z_$][\w$]*\s*<[^>\n]*\bany\b[^>\n]*>)"
 )
-PASSWORD_LITERAL = re.compile(r"password\s*=\s*[\"'][^\"']+[\"']", flags=re.IGNORECASE)
-SHELL_TRUE = re.compile(r"subprocess\.run\([^\n)]*shell\s*=\s*True")
-ABSOLUTE_WRITE = re.compile(r"(?:Path\([\"']/|open\([\"']/|write_text\([\"']/|write_bytes\([\"']/)")
+PASSWORD_LITERAL: re.Pattern[str] = re.compile(
+    r"password\s*=\s*[\"'][^\"']+[\"']",
+    flags=re.IGNORECASE,
+)
+SHELL_TRUE: re.Pattern[str] = re.compile(r"subprocess\.run\([^\n)]*shell\s*=\s*True")
+ABSOLUTE_WRITE: re.Pattern[str] = re.compile(
+    r"(?:Path\([\"']/|open\([\"']/|write_text\([\"']/|write_bytes\([\"']/)"
+)
 
 
 def check_unsafe_patterns(root: Path) -> CheckResult:

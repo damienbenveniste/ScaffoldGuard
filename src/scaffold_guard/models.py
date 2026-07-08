@@ -1,18 +1,25 @@
 """Typed data models shared across the CLI implementation."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias, cast
+from typing import Literal, TypeAlias
 
 AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
+CanonicalProfileChoice: TypeAlias = Literal["minimal", "python", "typescript", "monorepo"]
 ProfileChoice: TypeAlias = Literal["minimal", "python", "package", "typescript", "monorepo"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
 CiChoice: TypeAlias = Literal["github", "gitlab"]
 PythonQualityMode: TypeAlias = Literal["strict", "standard", "off"]
 PythonTypechecker: TypeAlias = Literal["mypy+pyright", "mypy", "pyright"]
 
-CANONICAL_PROFILES = {"minimal", "python", "typescript", "monorepo"}
-LEGACY_PROFILE_ALIASES = {"package": "python"}
+CANONICAL_PROFILES: frozenset[CanonicalProfileChoice] = frozenset(
+    ("minimal", "python", "typescript", "monorepo")
+)
+SUPPORTED_PROFILES: frozenset[ProfileChoice] = frozenset(
+    ("minimal", "python", "package", "typescript", "monorepo")
+)
+LEGACY_PROFILE_ALIASES: Mapping[str, CanonicalProfileChoice] = {"package": "python"}
 
 
 def normalize_profile_choice(profile: str) -> ProfileChoice:
@@ -20,9 +27,9 @@ def normalize_profile_choice(profile: str) -> ProfileChoice:
     normalized = profile.strip().lower()
     alias = LEGACY_PROFILE_ALIASES.get(normalized)
     if alias is not None:
-        return cast("ProfileChoice", alias)
+        return alias
     if normalized in CANONICAL_PROFILES:
-        return cast("ProfileChoice", normalized)
+        return normalized
     msg = f"Unsupported project profile: {profile}"
     raise ValueError(msg)
 

@@ -145,17 +145,17 @@ class InitPromptDefaults:
     typescript_test: TypeScriptTestOption
 
 
-CHOICE_SEPARATOR = "/"
-COVERAGE_MIN = 1
-COVERAGE_MAX = 100
-PROFILE_DESCRIPTIONS = (
+CHOICE_SEPARATOR: str = "/"
+COVERAGE_MIN: int = 1
+COVERAGE_MAX: int = 100
+PROFILE_DESCRIPTIONS: tuple[tuple[str, str], ...] = (
     ("minimal", "guardrails only; no Python or TypeScript source scaffold"),
     ("python", "Python package scaffold with src/, tests/, docs/, and uv"),
     ("typescript", "TypeScript package scaffold with npm and configurable tooling"),
     ("monorepo", "Python + TypeScript workspaces under packages/"),
 )
-PROFILE_CHOICES = tuple(option.value for option in ProfileOption)
-INIT_OPTION_PARAMETER_NAMES = (
+PROFILE_CHOICES: tuple[str, ...] = tuple(option.value for option in ProfileOption)
+INIT_OPTION_PARAMETER_NAMES: tuple[str, ...] = (
     "agent",
     "profile",
     "license_name",
