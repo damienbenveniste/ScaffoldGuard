@@ -8,3 +8,4 @@
 - Use subagents for bounded, read-only reconnaissance, test triage, docs review, or issue/PR summarization when that keeps bulky exploration out of the main thread.
 - Give subagents explicit scope and verify their findings before editing.
 - Do not claim work is complete until validation has passed or the blocker is clearly reported.
+- When the user asks to commit, push, or publish, prefer `scaffold-guard publish --message "<message>" --all` after reviewing the dirty scope, or use repeated `--file PATH` options for an exact scope. Use `--push-only` only when the working tree is clean.

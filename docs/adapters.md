@@ -21,6 +21,8 @@ The `codex` adapter currently generates project-scoped worker agents,
 `.codex/hooks/workflow-evidence.sh`. Its generated hooks run
 `scaffold-guard check` after file-edit tool use, record subagent workflow
 evidence, and warn when edits are observed without subagent start evidence.
+Its generated git rules allow `scaffold-guard publish` as the audited
+approval-free publishing path and protect raw `git commit` and `git push`.
 
 ## Claude Code
 
@@ -35,6 +37,9 @@ Language-specific Claude rules follow the selected profile: Python rules are
 included for `python` and `monorepo`, and TypeScript rules are included for
 `typescript` and `monorepo`.
 
+Claude git hygiene guidance points to the same `scaffold-guard publish` path
+for intentional commits and pushes.
+
 ## Cursor
 
 Cursor support creates `.cursor/rules/*.mdc` files plus the shared `AGENTS.md`.
@@ -43,6 +48,9 @@ Each `.mdc` file includes frontmatter with metadata such as `description`,
 
 Language-specific Cursor rules follow the selected profile in the same way as
 Claude rules.
+
+Cursor git hygiene guidance points to the same `scaffold-guard publish` path
+for intentional commits and pushes.
 
 ## Why Checks Still Matter
 

@@ -17,6 +17,7 @@ from scaffold_guard.diffing import DiffInspectionError, DiffReport, inspect_diff
 from scaffold_guard.doctor import DoctorReport, run_doctor
 from scaffold_guard.models import ScaffoldSummary
 from scaffold_guard.project_config import ProjectConfigError
+from scaffold_guard.publish import PublishError, PublishSummary, publish_changes
 from scaffold_guard.scaffold import (
     build_init_options,
     normalize_project_name,
@@ -593,6 +594,16 @@ def _print_doctor_report(report: DoctorReport) -> None:
         typer.echo(f"- {check.id}: {outcome} - {check.message}")
 
 
+def _print_publish_summary(summary: PublishSummary) -> None:
+    """Print an audited publish summary."""
+    action = "committed and pushed" if summary.commit_created else "pushed"
+    validation_mode = "quick" if summary.validation.quick else "full"
+    typer.echo(f"scaffold-guard publish: {action}")
+    typer.echo(f"path: {summary.root}")
+    typer.echo(f"validation: {validation_mode}")
+    typer.echo(f"target: {summary.remote}/{summary.branch}")
+
+
 @app.command("version")
 def version_command() -> None:
     """Print the installed scaffold-guard version."""
@@ -834,6 +845,59 @@ def validate_command(
         _print_validation_report(report)
     if not report.ok:
         raise typer.Exit(code=report.exit_code)
+
+
+@app.command("publish")
+def publish_command(
+    path: Annotated[
+        Path,
+        typer.Option("--path", help="Generated project root to publish.", resolve_path=True),
+    ] = Path(),
+    message: Annotated[
+        str | None,
+        typer.Option("--message", "-m", help="Commit message for the reviewed changes."),
+    ] = None,
+    all_changes: Annotated[
+        bool,
+        typer.Option("--all", help="Stage and publish every dirty file after validation."),
+    ] = False,
+    files: Annotated[
+        list[Path] | None,
+        typer.Option("--file", help="Dirty file that must be included in the publish scope."),
+    ] = None,
+    remote: Annotated[
+        str | None,
+        typer.Option("--remote", help="Git remote to push to. Defaults to upstream or origin."),
+    ] = None,
+    branch: Annotated[
+        str | None,
+        typer.Option("--branch", help="Remote branch to push to. Defaults to upstream or current."),
+    ] = None,
+    quick: Annotated[
+        bool,
+        typer.Option("--quick", help="Run the generated quick validation gate before publishing."),
+    ] = False,
+    push_only: Annotated[
+        bool,
+        typer.Option("--push-only", help="Push existing commits without creating a new commit."),
+    ] = False,
+) -> None:
+    """Validate, commit, and push generated-project changes through an audited path."""
+    try:
+        summary = publish_changes(
+            path,
+            message=message,
+            all_changes=all_changes,
+            files=tuple(files or ()),
+            remote=remote,
+            branch=branch,
+            quick=quick,
+            push_only=push_only,
+        )
+    except (ProjectConfigError, PublishError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    _print_publish_summary(summary)
 
 
 @app.command("compile-rules")

@@ -204,7 +204,9 @@ in the repository. `.codex/config.toml` enables Codex features and
 project-scoped agent defaults, `.codex/rules/*.rules` handles command
 permission policy, and `.codex/hooks.json` runs generated hook commands for
 mechanical workflow evidence and checks around tool use through
-`.codex/hooks/workflow-evidence.sh`.
+`.codex/hooks/workflow-evidence.sh`. Generated Codex git rules allow
+`scaffold-guard publish` as the audited approval-free commit and push path while
+protecting raw `git commit` and `git push`.
 
 ## Commands
 
@@ -213,10 +215,15 @@ scaffold-guard init [NAME] [--guided] [--profile minimal|python|typescript|monor
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]
+scaffold-guard publish [--path .] --message "Update project" [--all|--file PATH] [--remote origin] [--branch feature] [--quick]
 scaffold-guard compile-rules [--path .] [--agent codex|claude|cursor|all] [--dry-run] [--force]
 scaffold-guard doctor [--path .] [--json]
 scaffold-guard version
 ```
+
+Use `scaffold-guard publish` only after an explicit user request to publish. It
+runs generated-project validation, refuses mixed staged and unstaged scope,
+commits with an explicit message, and pushes the reviewed branch.
 
 Profile choices:
 

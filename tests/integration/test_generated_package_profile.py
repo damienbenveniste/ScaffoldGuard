@@ -824,12 +824,22 @@ def test_init_all_generates_all_adapter_files(
     assert Path(".cursor/rules/python.mdc") not in files
     assert "@AGENTS.md" in (project_dir / "CLAUDE.md").read_text(encoding="utf-8")
     agents = (project_dir / "AGENTS.md").read_text(encoding="utf-8")
+    codex_git_rules = (project_dir / ".codex/rules/git.rules").read_text(encoding="utf-8")
+    claude_git_rules = (project_dir / ".claude/rules/git-hygiene.md").read_text(encoding="utf-8")
+    cursor_git_rules = (project_dir / ".cursor/rules/git-hygiene.mdc").read_text(encoding="utf-8")
     cursor_testing = (project_dir / ".cursor/rules/testing.mdc").read_text(encoding="utf-8")
     assert "alwaysApply: false" in cursor_testing
     assert "For non-trivial implementation work, use worker subagents" in agents
     assert "Use read-only subagents for bounded work" in agents
     assert "Use dataclasses for internal structured state" in agents
     assert "TypedDict" in agents
+    assert 'pattern = ["scaffold-guard", "publish"]' in codex_git_rules
+    assert 'pattern = ["git", "commit"]' in codex_git_rules
+    assert 'pattern = ["git", "push"]' in codex_git_rules
+    assert 'decision = "prompt"' not in codex_git_rules
+    assert "scaffold-guard publish --message" in agents
+    assert "scaffold-guard publish --message" in claude_git_rules
+    assert "scaffold-guard publish --message" in cursor_git_rules
     assert "Claude Code: CLAUDE.md + .claude/rules/" in result.output
     assert "Cursor: .cursor/rules/*.mdc + AGENTS.md" in result.output
     assert ".codex/agents/*.toml" in result.output

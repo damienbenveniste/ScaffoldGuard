@@ -58,6 +58,8 @@ def test_command_reference_documents_user_facing_cli_commands() -> None:
         "Report which validation evidence is expected",
         "scaffold-guard validate",
         "Run the validation commands configured",
+        "scaffold-guard publish",
+        "Validate, commit, and push",
         "scaffold-guard compile-rules",
         "Regenerate managed agent instruction files",
         "scaffold-guard doctor",

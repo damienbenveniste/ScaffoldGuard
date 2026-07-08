@@ -30,8 +30,10 @@ configuration change in this repository.
   TypeScript tool prompts profile-aware, and keep generated files, config, CI,
   validation, docs, and agent instructions synchronized with those choices.
 - Keep V1 focused on a developer CLI. Do not add a SaaS dashboard, telemetry,
-  external AI calls, complex YAML DSL, plugin ecosystem, publish automation, or
-  automatic mutation of mature existing repositories.
+  external AI calls, complex YAML DSL, plugin ecosystem, package/release publish
+  automation, or automatic mutation of mature existing repositories. A guarded
+  git commit/push wrapper is acceptable only when it validates, refuses mixed
+  scope, and requires explicit user intent.
 - Always generate `AGENTS.md` for scaffolded projects. Treat it as the shared
   cross-agent instruction source.
 - Keep adapter behavior explicit:

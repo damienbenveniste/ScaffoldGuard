@@ -23,6 +23,8 @@ from scaffold_guard.scaffold import (
     write_rendered_files,
 )
 
+MINIMUM_FORBIDDEN_GIT_RULES = 5
+
 
 def test_render_file_combines_template_and_destination() -> None:
     """A packaged template can become a rendered file model."""
@@ -321,6 +323,7 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
     config = rendered_by_path[Path(".codex/config.toml")].content
     hooks = rendered_by_path[Path(".codex/hooks.json")].content
     hook_payload = json.loads(hooks)
+    git_rules = rendered_by_path[Path(".codex/rules/git.rules")].content
     rules = rendered_by_path[Path(".codex/rules/validation.rules")].content
     implementation_worker = rendered_by_path[
         Path(".codex/agents/implementation-worker.toml")
@@ -353,6 +356,12 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
     assert "Do not claim final task completion" in reviewer
     assert "workflow evidence warning" in evidence_hook
     assert "exit 0" in evidence_hook
+    assert 'pattern = ["git", "commit"]' in git_rules
+    assert 'pattern = ["git", "push"]' in git_rules
+    assert 'pattern = ["scaffold-guard", "publish"]' in git_rules
+    assert 'decision = "prompt"' not in git_rules
+    assert git_rules.count('decision = "forbidden"') >= MINIMUM_FORBIDDEN_GIT_RULES
+    assert 'decision = "allow"' in git_rules
     assert 'pattern = ["uv", "run", "ruff", "check", "packages/python"]' in rules
     assert 'pattern = ["npm", "run", "ts:typecheck"]' in rules
 
