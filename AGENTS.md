@@ -82,9 +82,10 @@ configuration change in this repository.
 
 - For every non-trivial implementation task, delegate implementation to at
   least one worker subagent before substantial local edits whenever subagent
-  tooling is available. Use multiple subagents in parallel when the work has
-  separable concerns such as code mapping, template changes, docs, tests, or
-  independent review.
+  tooling is available. When a clean implementation slice exists, at least one
+  worker subagent must own that slice and make the edits. Use multiple
+  subagents in parallel when the work has separable concerns such as code
+  mapping, template changes, docs, tests, or independent review.
 - Keep the main thread as coordinator and available for user coordination and
   new requests. The main thread owns scope, instruction interpretation,
   integration decisions, final validation, and user communication; worker
@@ -99,13 +100,17 @@ configuration change in this repository.
 - Use read-only briefs for mapping, test-gap discovery, documentation sweeps,
   and review. For broad implementation work, using only a read-only or audit
   subagent is not sufficient unless the implementation is tiny or cannot be
-  cleanly delegated. Use worker briefs for disjoint implementation slices when
+  cleanly delegated; an explorer or read-only audit alone does not satisfy the
+  delegation rule. Use worker briefs for disjoint implementation slices when
   edits can be separated cleanly.
 - Give each subagent a narrow brief with expected output: concrete file paths,
   risks, changed files if any, and recommended tests. Do not ask for broad
   summaries.
-- If subagents are not used for an implementation task, the final response must
-  say why before implementation proceeds locally. Acceptable reasons are
+- Do not let the main thread take over a worker-owned implementation slice
+  unless the worker is blocked, the slice proves too small to delegate, or the
+  user redirects the work.
+- If the main thread must implement locally, state the reason before making
+  local edits and repeat it in the final response. Acceptable reasons are
   limited to unavailable subagent tooling, a tiny single-file edit, or a task
   that is purely a direct user question with no repo change.
 - Do not delegate interpretation of repository instructions, selected skills,
