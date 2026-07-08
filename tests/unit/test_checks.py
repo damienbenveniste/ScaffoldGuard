@@ -671,7 +671,7 @@ def _generated_project(
     tmp_path: Path,
     *,
     ci: CiChoice = "github",
-    profile: ProfileChoice = "package",
+    profile: ProfileChoice = "python",
     biome: bool = True,
     vitest: bool = True,
 ) -> Path:

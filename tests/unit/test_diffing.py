@@ -303,7 +303,7 @@ def test_inspect_diff_rejects_missing_or_non_git_paths(tmp_path: Path) -> None:
         inspect_diff(tmp_path, base="main")
 
 
-def _generated_project(tmp_path: Path, *, profile: ProfileChoice = "package") -> Path:
+def _generated_project(tmp_path: Path, *, profile: ProfileChoice = "python") -> Path:
     """Create a standard generated project for diff classification tests."""
     options = build_init_options(
         "demo",

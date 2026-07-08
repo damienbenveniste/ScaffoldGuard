@@ -107,7 +107,7 @@ def test_init_codex_generates_valid_package_tree(
     """The codex adapter creates a base package tree with only AGENTS.md."""
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(app, ["init", "demo", "--profile", "package", "--agent", "codex"])
+    result = CliRunner().invoke(app, ["init", "demo", "--profile", "python", "--agent", "codex"])
 
     assert result.exit_code == SUCCESS, result.output
     project_dir = tmp_path / "demo"
@@ -115,7 +115,9 @@ def test_init_codex_generates_valid_package_tree(
     assert not (project_dir / "CLAUDE.md").exists()
     assert not (project_dir / ".claude").exists()
     assert not (project_dir / ".cursor").exists()
-    assert "Created ScaffoldGuard package project: demo" in result.output
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert config["project"]["profile"] == "python"
+    assert "Created ScaffoldGuard python project: demo" in result.output
     assert "Codex: AGENTS.md" in result.output
 
     _assert_no_unresolved_project_placeholders(project_dir)
@@ -123,6 +125,23 @@ def test_init_codex_generates_valid_package_tree(
     with _import_from_project(project_dir):
         package = cast(GreetingPackage, importlib.import_module("demo"))
         assert package.greet("Codex") == "Hello, Codex!"
+
+
+def test_init_accepts_legacy_package_profile_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The old non-interactive package profile still generates a Python project."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(app, ["init", "demo", "--profile", "package", "--agent", "codex"])
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert config["project"]["profile"] == "python"
+    assert (project_dir / "src/demo/core.py").exists()
+    assert "Created ScaffoldGuard python project: demo" in result.output
 
 
 def test_init_can_generate_minimal_gitlab_ci_project(
@@ -145,16 +164,16 @@ def test_init_can_generate_minimal_gitlab_ci_project(
     assert "CI:\n  - gitlab" in result.output
 
 
-def test_init_can_generate_package_gitlab_ci_project(
+def test_init_can_generate_python_gitlab_ci_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The package profile can generate GitLab CI instead of GitHub Actions."""
+    """The Python profile can generate GitLab CI instead of GitHub Actions."""
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(
         app,
-        ["init", "demo", "--profile", "package", "--agent", "codex", "--ci", "gitlab"],
+        ["init", "demo", "--profile", "python", "--agent", "codex", "--ci", "gitlab"],
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -361,17 +380,17 @@ def test_init_monorepo_profile_can_disable_typescript_optional_tools(
     assert "npm run ts:test" not in agents
 
 
-def test_init_package_can_disable_quality_tools(
+def test_init_python_can_disable_quality_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Package scaffolds can opt out of Ruff, mypy, and Pyright."""
+    """Python scaffolds can opt out of Ruff, mypy, and Pyright."""
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(
         app,
         ["init", "demo", "--guided"],
-        input="\ncodex\npackage\nMIT\n3.13\noff\noff\n95\ngithub\n",
+        input="\ncodex\npython\nMIT\n3.13\noff\noff\n95\ngithub\n",
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -389,6 +408,7 @@ def test_init_package_can_disable_quality_tools(
     assert "[tool.mypy]" not in pyproject
     assert tomllib.loads(pyproject)["dependency-groups"]
     assert tomllib.loads(config)["tools"] == {"ruff": False, "mypy": False, "pyright": False}
+    assert tomllib.loads(config)["project"]["profile"] == "python"
     assert "ruff" not in ci_workflow
     assert "mypy" not in ci_workflow
     assert "pyright" not in ci_workflow.lower()
@@ -436,7 +456,7 @@ def test_check_text_output_reports_failure_locations(
     monkeypatch.chdir(tmp_path)
     init_result = CliRunner().invoke(
         app,
-        ["init", "demo", "--profile", "package", "--agent", "codex"],
+        ["init", "demo", "--profile", "python", "--agent", "codex"],
     )
     assert init_result.exit_code == SUCCESS, init_result.output
     core_path = tmp_path / "demo/src/demo/core.py"
@@ -521,7 +541,7 @@ def test_init_without_name_runs_guided_setup(
     result = CliRunner().invoke(
         app,
         ["init"],
-        input="guided-demo\nclaude\npackage\nApache-2.0\n3.14\nstrict\nmypy+pyright\n90\ngithub\n",
+        input="guided-demo\nclaude\npython\nApache-2.0\n3.14\nstrict\nmypy+pyright\n90\ngithub\n",
     )
 
     assert result.exit_code == SUCCESS, result.output
@@ -533,16 +553,19 @@ def test_init_without_name_runs_guided_setup(
     assert 'requires-python = ">=3.14"' in pyproject
     assert "fail_under = 90" in pyproject
     assert 'license = "Apache-2.0"' in pyproject
+    assert 'profile = "python"' in config
     assert 'python_min = "3.14"' in config
     assert "coverage_fail_under = 90" in config
     assert "ScaffoldGuard guided setup" in result.output
     assert "minimal: guardrails only; no Python or TypeScript source scaffold" in result.output
-    assert "package: Python package scaffold with src/, tests/, docs/, and uv" in result.output
+    assert "Project profile (minimal/python/typescript/monorepo)" in result.output
+    assert "python: Python package scaffold with src/, tests/, docs/, and uv" in result.output
+    assert "package: Python package scaffold" not in result.output
     assert "typescript: TypeScript package scaffold with npm and configurable tooling" in (
         result.output
     )
     assert "monorepo: Python + TypeScript workspaces under packages/" in result.output
-    assert "Created ScaffoldGuard package project: guided-demo" in result.output
+    assert "Created ScaffoldGuard python project: guided-demo" in result.output
 
 
 def test_init_guided_monorepo_prompts_for_language_tool_setup(
@@ -581,7 +604,7 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
         app,
         ["init"],
         input=(
-            "demo\nbad-agent\ncodex\npackage\nMIT\n3.13\n"
+            "demo\nbad-agent\ncodex\npackage\npython\nMIT\n3.13\n"
             "maybe\nstrict\nbad-type\nmypy+pyright\nnot-a-number\n101\n95\ngithub\n"
         ),
     )
@@ -590,6 +613,7 @@ def test_init_guided_recovers_from_invalid_prompt_answers(
     assert (tmp_path / "demo/AGENTS.md").exists()
     assert not (tmp_path / "demo/CLAUDE.md").exists()
     assert "Choose one of: codex, claude, cursor, all" in result.output
+    assert "Choose one of: minimal, python, typescript, monorepo" in result.output
     assert "Choose one of: strict, off" in result.output
     assert "Choose one of: mypy+pyright, mypy, pyright, off" in result.output
     assert "Test coverage floor must be an integer." in result.output
@@ -604,8 +628,9 @@ def test_init_help_explains_profile_choices() -> None:
     assert "minimal" in result.output
     assert "guardrails only" in result.output
     assert "source scaffold" in result.output
-    assert "package" in result.output
+    assert "python" in result.output
     assert "Python package scaffold" in result.output
+    assert "package Python package scaffold" not in result.output
     assert "typescript TypeScript" in result.output
     assert "monorepo" in result.output
     assert "TypeScript workspaces" in result.output

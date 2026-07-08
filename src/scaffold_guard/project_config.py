@@ -11,9 +11,18 @@ from scaffold_guard.checks.config import (
     str_value,
     table_value,
 )
-from scaffold_guard.models import AgentChoice, CiChoice, InitOptions, ProfileChoice
+from scaffold_guard.models import (
+    CANONICAL_PROFILES,
+    AgentChoice,
+    CiChoice,
+    InitOptions,
+    ProfileChoice,
+    normalize_profile_choice,
+    profile_includes_python,
+    profile_includes_typescript,
+)
 
-SUPPORTED_PROFILES: tuple[ProfileChoice, ...] = ("minimal", "package", "typescript", "monorepo")
+SUPPORTED_PROFILES = CANONICAL_PROFILES | {"package"}
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
 
@@ -48,12 +57,12 @@ class GeneratedProjectConfig:
     @property
     def python(self) -> bool:
         """Return whether the generated project includes Python package code."""
-        return self.profile in {"package", "monorepo"}
+        return profile_includes_python(self.profile)
 
     @property
     def typescript(self) -> bool:
         """Return whether the generated project includes TypeScript package code."""
-        return self.profile in {"typescript", "monorepo"}
+        return profile_includes_typescript(self.profile)
 
     @property
     def agent_choice(self) -> AgentChoice:
@@ -143,8 +152,8 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     name = _required_str(project, "name")
     package = _required_str(project, "package")
     profile = _required_profile(project, "profile")
-    python_tool_default = profile in {"package", "monorepo"}
-    typescript_tool_default = profile in {"typescript", "monorepo"}
+    python_tool_default = profile_includes_python(profile)
+    typescript_tool_default = profile_includes_typescript(profile)
     ci = _optional_ci(project, features)
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
@@ -188,7 +197,7 @@ def _required_profile(table: Mapping[str, object], key: str) -> ProfileChoice:
     """Return a required supported profile field from a TOML table."""
     value = _required_str(table, key)
     if value in SUPPORTED_PROFILES:
-        return value
+        return normalize_profile_choice(value)
     msg = f"Unsupported generated project profile: {value}"
     raise ProjectConfigError(msg)
 

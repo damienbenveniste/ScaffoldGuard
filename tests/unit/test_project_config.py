@@ -128,6 +128,23 @@ def test_generated_project_config_loads_minimal_profile(
     assert not (project_dir / "src").exists()
 
 
+def test_generated_project_config_loads_legacy_package_profile(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    replace_text: Callable[[Path, str, str], None],
+) -> None:
+    """Existing package-profile configs are treated as canonical Python projects."""
+    project_dir = generated_project(tmp_path)
+    replace_text(project_dir / "scaffold-guard.toml", 'profile = "python"', 'profile = "package"')
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+
+    assert config.profile == "python"
+    assert config.python
+    assert options.profile == "python"
+
+
 def test_generated_project_config_loads_typescript_profile(
     tmp_path: Path,
     generated_project: Callable[..., Path],
@@ -224,7 +241,7 @@ def test_generated_project_config_rejects_bad_profile_and_missing_coverage(
     config_path = project_dir / "scaffold-guard.toml"
     original = config_path.read_text(encoding="utf-8")
 
-    replace_text(config_path, 'profile = "package"', 'profile = "application"')
+    replace_text(config_path, 'profile = "python"', 'profile = "application"')
     with pytest.raises(ProjectConfigError, match="Unsupported generated project profile"):
         load_generated_project_config(project_dir)
 

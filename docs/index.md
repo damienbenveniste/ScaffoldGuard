@@ -3,7 +3,7 @@
 `scaffold-guard` creates strict starter repositories for coding-agent workflows.
 The default `minimal` profile adds agent guardrails, GitHub Actions or GitLab
 CI, local policy checks, and agent instruction files without forcing a Python
-package layout. The `package`, `typescript`, and `monorepo` profiles add typed
+package layout. The `python`, `typescript`, and `monorepo` profiles add typed
 Python, TypeScript, or mixed Python+TypeScript starter layouts.
 
 ## What V1 Provides
@@ -32,10 +32,10 @@ scaffold-guard validate --quick
 
 The `init` command starts guided setup when `NAME` is omitted. Leave the
 project-name prompt blank to initialize the current empty folder, or enter a
-name to create a new project directory. Choose `package` when you want Python
+name to create a new project directory. Choose `python` when you want Python
 source, tests, docs, and Python tooling. Choose `typescript` for npm and
 TypeScript tooling. Choose `monorepo` when one repository should contain Python
-and TypeScript workspaces. Package and monorepo guided setup asks for Ruff and
+and TypeScript workspaces. Python and monorepo guided setup asks for Ruff and
 Python type-checking choices. TypeScript and monorepo guided setup asks for
 TypeScript compiler, formatter/linter, and test-runner choices. Pass `NAME` and
 flags for non-interactive use with defaults. Use `--ci gitlab` when the

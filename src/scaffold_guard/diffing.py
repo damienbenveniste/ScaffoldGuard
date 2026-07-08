@@ -14,6 +14,7 @@ from scaffold_guard.checks.config import (
     str_value,
     table_value,
 )
+from scaffold_guard.models import normalize_profile_choice
 
 PUBLIC_SYMBOL = re.compile(r"^(?:def|class)\s+([A-Za-z][A-Za-z0-9_]*)\b", flags=re.MULTILINE)
 PUBLIC_TYPESCRIPT_SYMBOL = re.compile(
@@ -90,7 +91,7 @@ class ProjectValidationSettings:
 
     package_name: str | None
     coverage: int | None
-    profile: str = "package"
+    profile: str = "python"
     ruff: bool = True
     mypy: bool = True
     pyright: bool = True
@@ -219,8 +220,13 @@ def load_project_validation_settings(root: Path) -> ProjectValidationSettings:
     config = load_scaffold_guard_toml(root)
     project = table_value(config, "project")
     tools = table_value(config, "tools")
-    profile = str_value(project, "profile") or "package"
-    tool_default = profile in {"package", "monorepo"}
+    raw_profile = str_value(project, "profile") or "package"
+    profile: str
+    try:
+        profile = normalize_profile_choice(raw_profile)
+    except ValueError:
+        profile = raw_profile
+    tool_default = profile in {"python", "monorepo"}
     return ProjectValidationSettings(
         package_name=str_value(project, "package"),
         coverage=int_value(project, "coverage_fail_under"),

@@ -2,12 +2,37 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, cast
 
 AgentChoice: TypeAlias = Literal["codex", "claude", "cursor", "all"]
-ProfileChoice: TypeAlias = Literal["minimal", "package", "typescript", "monorepo"]
+ProfileChoice: TypeAlias = Literal["minimal", "python", "package", "typescript", "monorepo"]
 LicenseChoice: TypeAlias = Literal["MIT", "Apache-2.0", "none"]
 CiChoice: TypeAlias = Literal["github", "gitlab"]
+
+CANONICAL_PROFILES = {"minimal", "python", "typescript", "monorepo"}
+LEGACY_PROFILE_ALIASES = {"package": "python"}
+
+
+def normalize_profile_choice(profile: str) -> ProfileChoice:
+    """Return the canonical profile value, accepting legacy aliases."""
+    normalized = profile.strip().lower()
+    alias = LEGACY_PROFILE_ALIASES.get(normalized)
+    if alias is not None:
+        return cast("ProfileChoice", alias)
+    if normalized in CANONICAL_PROFILES:
+        return cast("ProfileChoice", normalized)
+    msg = f"Unsupported project profile: {profile}"
+    raise ValueError(msg)
+
+
+def profile_includes_python(profile: str) -> bool:
+    """Return whether a profile includes Python package code."""
+    return normalize_profile_choice(profile) in {"python", "monorepo"}
+
+
+def profile_includes_typescript(profile: str) -> bool:
+    """Return whether a profile includes TypeScript package code."""
+    return normalize_profile_choice(profile) in {"typescript", "monorepo"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,12 +69,12 @@ class InitOptions:
     @property
     def python_enabled(self) -> bool:
         """Return whether the generated profile includes Python package code."""
-        return self.profile in {"package", "monorepo"}
+        return profile_includes_python(self.profile)
 
     @property
     def typescript_enabled(self) -> bool:
         """Return whether the generated profile includes TypeScript package code."""
-        return self.profile in {"typescript", "monorepo"}
+        return profile_includes_typescript(self.profile)
 
     @property
     def codex_enabled(self) -> bool:

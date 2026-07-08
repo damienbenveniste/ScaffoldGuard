@@ -34,7 +34,7 @@ Detects common risky agent outputs, including:
 ### project-health
 
 Verifies the expected generated project structure exists for the selected
-profile. Package projects require Python source, tests, docs, CI, and
+profile. Python-profile projects require Python source, tests, docs, CI, and
 `pyrightconfig.json` when Pyright is enabled. TypeScript projects require
 `package.json`, TypeScript config, Biome config, source, tests, and CI.
 Monorepos require both `packages/python/` and `packages/typescript/`.

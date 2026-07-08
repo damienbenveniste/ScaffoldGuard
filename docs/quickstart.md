@@ -24,7 +24,7 @@ Profile choices:
 | Profile | Meaning |
 |---|---|
 | `minimal` | Guardrails only; no Python or TypeScript source scaffold |
-| `package` | Python package scaffold with `src/`, tests, docs, and `uv` |
+| `python` | Python package scaffold with `src/`, tests, docs, and `uv` |
 | `typescript` | TypeScript package scaffold with npm and configurable TypeScript tooling |
 | `monorepo` | Python + TypeScript workspaces under `packages/` |
 
@@ -59,13 +59,13 @@ Use GitLab CI instead of GitHub Actions:
 scaffold-guard init gitlab_demo --ci gitlab
 ```
 
-Use the `package` profile when you want a full Python package layout. Guided
+Use the `python` profile when you want a full Python package layout. Guided
 setup asks for Ruff and Python type-checking choices. Ruff, mypy, and Pyright
 are enabled by default.
 
 ```bash
-scaffold-guard init package_demo --guided
-cd package_demo
+scaffold-guard init python_demo --guided
+cd python_demo
 uv sync --all-groups
 scaffold-guard validate --quick
 ```

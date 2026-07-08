@@ -3,7 +3,7 @@
 `scaffold-guard` generates strict starter repositories for teams using coding
 agents. It creates local validation commands, GitHub Actions workflows or
 GitLab CI pipelines, and agent instructions for Codex, Claude Code, and Cursor.
-The default `minimal` profile adds guardrails only. The `package`,
+The default `minimal` profile adds guardrails only. The `python`,
 `typescript`, and `monorepo` profiles add Python, TypeScript, or mixed
 Python+TypeScript starter layouts.
 
@@ -81,8 +81,8 @@ package tooling. Guided setup lets you keep or disable Ruff, mypy, and Pyright;
 all three are enabled by default.
 
 ```bash
-scaffold-guard init package_demo --guided
-cd package_demo
+scaffold-guard init python_demo --guided
+cd python_demo
 uv sync --all-groups
 scaffold-guard validate --quick
 ```
@@ -125,7 +125,7 @@ my_project/
   .github/workflows/ci.yml  # or .gitlab-ci.yml
 ```
 
-The `package` profile adds a Python package scaffold:
+The `python` profile adds a Python package scaffold:
 
 ```text
 my_project/
@@ -191,7 +191,7 @@ Adapter files are added according to `--agent`:
 ## Commands
 
 ```bash
-scaffold-guard init [NAME] [--guided] [--profile minimal|package|typescript|monorepo] [--agent codex|claude|cursor|all] [--ci github|gitlab] [--ruff strict|off] [--python-typecheck mypy+pyright|mypy|pyright|off] [--typescript-mode strict|standard] [--typescript-lint biome|off] [--typescript-test vitest|off]
+scaffold-guard init [NAME] [--guided] [--profile minimal|python|typescript|monorepo] [--agent codex|claude|cursor|all] [--ci github|gitlab] [--ruff strict|off] [--python-typecheck mypy+pyright|mypy|pyright|off] [--typescript-mode strict|standard] [--typescript-lint biome|off] [--typescript-test vitest|off]
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]
@@ -205,7 +205,7 @@ Profile choices:
 | Profile | Meaning |
 |---|---|
 | `minimal` | Guardrails only; no Python or TypeScript source scaffold |
-| `package` | Python package scaffold with `src/`, tests, docs, and `uv` |
+| `python` | Python package scaffold with `src/`, tests, docs, and `uv` |
 | `typescript` | TypeScript package scaffold with npm and configurable TypeScript tooling |
 | `monorepo` | Python + TypeScript workspaces under `packages/` |
 

@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
+from scaffold_guard.models import normalize_profile_choice
+
 
 def load_toml(path: Path) -> Mapping[str, object]:
     """Load a TOML file as a nested object mapping."""
@@ -85,10 +87,14 @@ def ci_provider(root: Path) -> str:
 
 
 def project_profile(root: Path) -> str:
-    """Return the generated project profile, defaulting to the original package profile."""
+    """Return the canonical project profile, defaulting legacy configs to Python."""
     config = load_scaffold_guard_toml(root)
     project = table_value(config, "project")
-    return str_value(project, "profile") or "package"
+    profile = str_value(project, "profile") or "package"
+    try:
+        return normalize_profile_choice(profile)
+    except ValueError:
+        return profile
 
 
 def tool_enabled(root: Path, name: str) -> bool:
@@ -97,7 +103,7 @@ def tool_enabled(root: Path, name: str) -> bool:
     tools = table_value(config, "tools")
     profile = project_profile(root)
     if name in {"ruff", "mypy", "pyright"}:
-        return bool_value(tools, name, default=profile in {"package", "monorepo"})
+        return bool_value(tools, name, default=profile in {"python", "monorepo"})
     if name in {"typescript", "typescript_strict", "biome", "vitest"}:
         return bool_value(tools, name, default=profile in {"typescript", "monorepo"})
     return bool_value(tools, name, default=False)

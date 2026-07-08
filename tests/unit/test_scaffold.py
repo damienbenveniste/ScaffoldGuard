@@ -71,7 +71,7 @@ def test_build_init_options_uses_current_base_directory(tmp_path: Path) -> None:
         "demo-project",
         base_dir=tmp_path,
         agent="all",
-        profile="package",
+        profile="python",
         license_name="MIT",
         python_min="3.13",
         coverage=95,
@@ -83,9 +83,30 @@ def test_build_init_options_uses_current_base_directory(tmp_path: Path) -> None:
     assert options.target_dir == tmp_path / "demo-project"
     assert options.project_slug == "demo-project"
     assert options.package_name == "demo_project"
+    assert options.profile == "python"
     assert options.ruff_enabled
     assert options.mypy_enabled
     assert options.pyright_enabled
+
+
+def test_build_init_options_accepts_legacy_package_profile(tmp_path: Path) -> None:
+    """The old package profile input normalizes to the canonical Python profile."""
+    options = build_init_options(
+        "demo",
+        base_dir=tmp_path,
+        agent="all",
+        profile="package",
+        license_name="MIT",
+        python_min="3.13",
+        coverage=95,
+        ci="github",
+        dry_run=False,
+        force=False,
+    )
+
+    assert options.profile == "python"
+    assert options.docs_enabled
+    assert options.python_enabled
 
 
 def test_build_init_options_accepts_disabled_quality_tools(tmp_path: Path) -> None:
@@ -94,7 +115,7 @@ def test_build_init_options_accepts_disabled_quality_tools(tmp_path: Path) -> No
         "demo",
         base_dir=tmp_path,
         agent="all",
-        profile="package",
+        profile="python",
         license_name="MIT",
         python_min="3.13",
         coverage=95,
@@ -129,7 +150,7 @@ def test_build_init_options_can_target_current_directory(tmp_path: Path) -> None
         ".",
         base_dir=project_dir,
         agent="all",
-        profile="package",
+        profile="python",
         license_name="MIT",
         python_min="3.13",
         coverage=95,
@@ -425,7 +446,7 @@ def _init_options(
     ci: CiChoice = "github",
     dry_run: bool = False,
     force: bool = False,
-    profile: ProfileChoice = "package",
+    profile: ProfileChoice = "python",
     ruff: bool = True,
     mypy: bool = True,
     pyright: bool = True,

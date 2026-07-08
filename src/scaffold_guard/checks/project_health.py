@@ -28,7 +28,7 @@ def _missing_required_paths(root: Path) -> list[CheckFinding]:
         Path("scaffold-guard.toml"),
     ]
     profile = project_profile(root)
-    if profile == "package":
+    if profile == "python":
         required_paths.extend(_package_required_paths(root))
     if profile == "typescript":
         required_paths.extend(_typescript_required_paths(root))

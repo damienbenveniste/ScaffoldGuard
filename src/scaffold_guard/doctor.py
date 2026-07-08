@@ -57,7 +57,7 @@ def run_doctor(path: Path) -> DoctorReport:
     checks = [
         _python_version_check(),
     ]
-    if profile in {"minimal", "package", "monorepo"}:
+    if profile in {"minimal", "python", "monorepo"}:
         checks.append(_executable_check("uv"))
     if profile in {"typescript", "monorepo"}:
         checks.append(_executable_check("npm"))
@@ -165,7 +165,7 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
             message="AGENTS.md present." if (root / "AGENTS.md").exists() else "AGENTS.md missing.",
         ),
     ]
-    if config.profile == "package":
+    if config.profile == "python":
         checks.append(
             DoctorCheck(
                 id="package-import-directory",

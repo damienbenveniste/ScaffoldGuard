@@ -9,6 +9,7 @@ from pathlib import Path
 from scaffold_guard.adapters import adapters_for
 from scaffold_guard.fs import ensure_relative_safe_path, is_within_directory, write_text_safely
 from scaffold_guard.models import (
+    CANONICAL_PROFILES,
     AgentChoice,
     CiChoice,
     InitOptions,
@@ -16,11 +17,13 @@ from scaffold_guard.models import (
     ProfileChoice,
     ScaffoldSummary,
     TemplateSpec,
+    normalize_profile_choice,
+    profile_includes_python,
 )
 from scaffold_guard.renderer import TemplateRenderer
 
 PROJECT_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
-SUPPORTED_PROFILES = {"minimal", "package", "typescript", "monorepo"}
+SUPPORTED_PROFILES = CANONICAL_PROFILES | {"package"}
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
 PACKAGE_BASE_TEMPLATE_SPECS = (
@@ -190,6 +193,7 @@ def build_init_options(
     if profile not in SUPPORTED_PROFILES:
         msg = f"Unsupported project profile: {profile}"
         raise ValueError(msg)
+    canonical_profile = normalize_profile_choice(profile)
     if ci not in SUPPORTED_CI:
         msg = f"Unsupported CI provider: {ci}"
         raise ValueError(msg)
@@ -198,12 +202,12 @@ def build_init_options(
         project_slug=project_slug,
         package_name=package_name,
         agent=agent,
-        profile=profile,
+        profile=canonical_profile,
         license=license_name,
         python_min=python_min,
         coverage=coverage,
         ci=ci,
-        docs_enabled=profile == "package",
+        docs_enabled=canonical_profile == "python",
         dry_run=dry_run,
         force=force,
     )
@@ -301,7 +305,11 @@ def package_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
     """Return profile templates plus selected adapter templates."""
     adapter_specs = _adapter_template_specs(options)
     profile_specs = _filtered_profile_template_specs(options)
-    if options.profile == "package" and options.pyright_enabled:
+    if (
+        profile_includes_python(options.profile)
+        and options.profile != "monorepo"
+        and options.pyright_enabled
+    ):
         profile_specs = (
             *profile_specs,
             TemplateSpec("package/pyrightconfig.json.j2", "pyrightconfig.json"),

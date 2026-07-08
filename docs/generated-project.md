@@ -12,9 +12,9 @@ my_project/
   .github/workflows/ci.yml  # or .gitlab-ci.yml
 ```
 
-The `package` profile creates a typed Python package with docs, examples,
+The `python` profile creates a typed Python package with docs, examples,
 tests, CI, and agent instructions. Ruff, mypy, and Pyright are enabled by
-default, but package guided setup can disable any of them.
+default, but Python guided setup can disable any of them.
 
 ```text
 my_project/
@@ -107,7 +107,7 @@ scaffold-guard check
 scaffold-guard validate --quick
 ```
 
-Package projects additionally use their generated Python toolchain. Validation
+Python-profile projects additionally use their generated Python toolchain. Validation
 commands only include Ruff, mypy, and Pyright when those tools are enabled:
 
 ```bash

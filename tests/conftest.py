@@ -17,7 +17,7 @@ def generated_project() -> Callable[..., Path]:
         tmp_path: Path,
         *,
         agent: AgentChoice = "all",
-        profile: ProfileChoice = "package",
+        profile: ProfileChoice = "python",
         ci: CiChoice = "github",
         ruff: bool = True,
         mypy: bool = True,

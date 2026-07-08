@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from scaffold_guard.models import InitOptions
+from scaffold_guard.models import InitOptions, normalize_profile_choice
 
 
 def test_init_options_agent_flags_for_all() -> None:
@@ -12,7 +12,7 @@ def test_init_options_agent_flags_for_all() -> None:
         project_slug="demo",
         package_name="demo",
         agent="all",
-        profile="package",
+        profile="python",
         license="MIT",
         python_min="3.13",
         coverage=95,
@@ -34,7 +34,7 @@ def test_init_options_agent_flags_for_single_adapter() -> None:
         project_slug="demo",
         package_name="demo",
         agent="claude",
-        profile="package",
+        profile="python",
         license="MIT",
         python_min="3.13",
         coverage=95,
@@ -47,3 +47,8 @@ def test_init_options_agent_flags_for_single_adapter() -> None:
     assert not options.codex_enabled
     assert options.claude_enabled
     assert not options.cursor_enabled
+
+
+def test_normalize_profile_choice_accepts_legacy_package_alias() -> None:
+    """Legacy package profile values normalize to the canonical Python profile."""
+    assert normalize_profile_choice("package") == "python"

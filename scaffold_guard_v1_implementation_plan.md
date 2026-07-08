@@ -172,7 +172,7 @@ my_project/
       ci.yml
 ```
 
-For the explicit `package` profile, also generate:
+For the explicit `python` profile, also generate:
 
 ```text
 my_project/
@@ -414,7 +414,7 @@ Confirm this with a wheel build test.
 ```bash
 scaffold-guard init NAME \
   --agent codex|claude|cursor|all \
-  --profile minimal|package \
+  --profile minimal|python \
   --license MIT|Apache-2.0|none \
   --python-min 3.13 \
   --coverage 95 \
@@ -929,7 +929,7 @@ exclude_also = [
 [project]
 name = "{{ project_slug }}"
 package = "{{ package_name }}"
-profile = "package"
+profile = "python"
 python_min = "{{ python_min }}"
 coverage_fail_under = {{ coverage }}
 
@@ -1333,7 +1333,7 @@ from pathlib import Path
 from typing import Literal
 
 AgentChoice = Literal["codex", "claude", "cursor", "all"]
-ProfileChoice = Literal["minimal", "package"]
+ProfileChoice = Literal["minimal", "python"]
 LicenseChoice = Literal["MIT", "Apache-2.0", "none"]
 
 
@@ -1431,7 +1431,7 @@ Implement:
 - `ClaudeAdapter`: returns `CLAUDE.md` and `.claude/rules/*.md`.
 - `CursorAdapter`: returns `.cursor/rules/*.mdc`.
 
-Keep `AGENTS.md` generation in the base package profile because it is shared.
+Keep `AGENTS.md` generation in the base Python profile because it is shared.
 
 ## 9.6 Checks
 
@@ -1678,7 +1678,7 @@ Add a note: Homebrew formula is planned after PyPI install is stable.
 
 ---
 
-## Milestone 2: Implement `init` for the `minimal` and `package` profiles
+## Milestone 2: Implement `init` for the `minimal` and `python` profiles
 
 ### Tasks
 
@@ -1687,16 +1687,16 @@ Add a note: Homebrew formula is planned after PyPI install is stable.
 - [ ] Render base project files.
 - [ ] Render GitHub Actions.
 - [ ] Render minimal guardrails by default.
-- [ ] Render package docs and tests when `--profile package` is selected.
+- [ ] Render package docs and tests when `--profile python` is selected.
 - [ ] Render `scaffold-guard.toml`.
 - [ ] Add CLI output summary.
 
 ### Acceptance criteria
 
 - `scaffold-guard init demo --agent codex` produces a valid minimal tree.
-- `scaffold-guard init demo --profile package --agent codex` produces a valid package tree.
-- Package-profile generated source imports.
-- Package-profile generated tests are syntactically valid.
+- `scaffold-guard init demo --profile python --agent codex` produces a valid package tree.
+- Python-profile generated source imports.
+- Python-profile generated tests are syntactically valid.
 - Generated files have no unresolved placeholders.
 
 ---
@@ -1931,7 +1931,7 @@ Start with Milestone 0 through Milestone 3 only:
 - package bootstrap;
 - template renderer;
 - filesystem-safe init command;
-- package profile templates;
+- Python profile templates;
 - Codex, Claude, and Cursor adapters.
 
 Do not implement hooks, Homebrew, FastAPI/RAG/MCP profiles, telemetry, or CD.

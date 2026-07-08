@@ -128,7 +128,7 @@ def _init_git_project(tmp_path: Path) -> Path:
     """Generate a project and commit its initial state."""
     result = CliRunner().invoke(
         app,
-        ["init", "demo", "--profile", "package"],
+        ["init", "demo", "--profile", "python"],
         catch_exceptions=False,
     )
     assert result.exit_code == SUCCESS, result.output

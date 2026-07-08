@@ -16,7 +16,7 @@ configuration change in this repository.
 - Preserve the V1 promise: generate a repository with clear agent instructions,
   strict local tooling, GitHub Actions or GitLab CI, and policy checks that
   catch common agent mistakes. The default `minimal` profile should add
-  guardrails only; `package` should be explicit when users want Python package
+  guardrails only; `python` should be explicit when users want Python package
   folders and tooling; `typescript` and `monorepo` should be explicit when
   users want TypeScript or mixed Python+TypeScript starter layouts.
 - Keep `scaffold-guard init` friendly for first-time users: omitting `NAME`
@@ -199,7 +199,7 @@ configuration change in this repository.
 - Unit tests should cover CLI argument handling, rendering, scaffold planning,
   filesystem safety, adapter selection, unsafe-pattern checks, diff
   requirements, generated-file checks, and config consistency.
-- Integration tests should cover generated minimal, package, TypeScript, and
+- Integration tests should cover generated minimal, python, TypeScript, and
   monorepo profiles, adapter file sets, `compile-rules` idempotence,
   `validate --quick`, JSON modes, and import smoke behavior where applicable.
 - Tests must verify behavior and regressions, not duplicate implementation
