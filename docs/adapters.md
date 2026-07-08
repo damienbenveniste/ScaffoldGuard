@@ -34,3 +34,17 @@ Instruction files guide agents, but they do not enforce behavior. Generated
 projects use `scaffold-guard check`, strict local tooling, and the selected CI
 provider to catch risky patterns such as type suppressions, unresolved
 templates, missing adapter files, and mismatched configuration.
+
+## Guidance Included
+
+Generated agent files include practical guidance for:
+
+- typed data modeling with dataclasses, `TypedDict`, typed mappings, and
+  Pydantic only where runtime validation is justified;
+- docstrings that explain behavior, invariants, side effects, and error
+  handling instead of restating signatures;
+- subagent delegation for bounded read-only investigation that keeps the main
+  thread focused on decisions, edits, validation, and synthesis;
+- optional read-only MCP usage for repository hosting, documentation, browser,
+  package-index, database, or observability context when those servers are
+  available.

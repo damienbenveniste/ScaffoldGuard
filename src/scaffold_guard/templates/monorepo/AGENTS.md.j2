@@ -17,11 +17,25 @@ These rules apply to every code, test, documentation, and configuration change i
 - Preserve user changes and do not overwrite existing work without explicit intent.
 - Do not claim completion until relevant validation has passed or a concrete blocker is reported.
 
+## Delegation and External Context
+
+- Keep the main thread focused on decisions, edits, validation, and final synthesis.
+- Use subagents for bounded, read-only work that would otherwise clutter the main thread: broad codebase reconnaissance, test-failure triage, documentation review, compatibility research, or issue/PR summarization.
+- Give subagents a narrow question, explicit paths or commands, and the expected evidence format. Do not delegate final judgment, destructive actions, secret handling, or broad edits.
+- Treat subagent output as evidence to verify, not as authoritative truth. The primary agent owns all edits and completion claims.
+- Use MCP servers when available for current external context: repository hosting for issues, PRs, and CI; documentation/context servers for library APIs; browser tools for rendered UI checks; and read-only database or observability servers for diagnostics.
+- Keep MCP usage read-only unless the user explicitly asks for mutation. If an MCP server is unavailable, continue with repo-local evidence and state the limitation.
+
 ## Python Tooling
 
 - Use `uv` for Python dependency management and command execution.
 - Keep generated Python code on Python `{{ python_min }}` or newer.
 - Use {{ configured_tools }} as configured in `pyproject.toml`.
+- Keep public Python functions, methods, constants, and module exports typed.
+- Avoid `Any` and `dict[str, Any]`; prefer explicit typed structures.
+- Use `dataclass(frozen=True, slots=True)` for internal structured state unless mutation is required.
+- Use `TypedDict` or explicit typed mappings for stable JSON, TOML, API, or CLI payload shapes.
+- Use Pydantic only at runtime-validation boundaries where parse errors, coercion, or external input validation justify the dependency and complexity.
 
 ## TypeScript Tooling
 
@@ -35,6 +49,8 @@ These rules apply to every code, test, documentation, and configuration change i
 - Use Vitest for tests and coverage.
 {% endif %}
 - Do not introduce `any`, broad casts, `// @ts-ignore`, or broad lint suppressions to hide failures.
+- Prefer explicit interfaces, readonly data structures, discriminated unions, and narrow boundary parsing.
+- Add docstrings or doc comments when behavior, invariants, side effects, or error handling are not obvious from names and types.
 
 ## Testing Rules
 

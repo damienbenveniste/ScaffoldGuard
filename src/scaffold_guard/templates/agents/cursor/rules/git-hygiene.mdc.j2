@@ -9,4 +9,7 @@ alwaysApply: true
 
 - Preserve unrelated user changes.
 - Keep diffs focused.
+- Keep the main thread focused on decisions, edits, validation, and final synthesis.
+- Use subagents for bounded, read-only reconnaissance, test triage, docs review, or issue/PR summarization when that keeps bulky exploration out of the main thread.
+- Give subagents explicit scope and verify their findings before editing.
 - Before claiming done, state validation commands and results.

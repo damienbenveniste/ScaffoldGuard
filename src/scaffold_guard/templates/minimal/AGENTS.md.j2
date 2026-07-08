@@ -17,11 +17,26 @@ These rules apply to every code, documentation, and configuration change in this
 - Preserve user changes and do not overwrite existing work without explicit intent.
 - Do not claim completion until relevant validation has passed or a concrete blocker is reported.
 
+## Delegation and External Context
+
+- Keep the main thread focused on decisions, edits, validation, and final synthesis.
+- Use subagents for bounded, read-only work that would otherwise clutter the main thread: broad repository reconnaissance, failure triage, documentation review, or issue/PR summarization.
+- Give subagents a narrow question, explicit paths or commands, and the expected evidence format. Do not delegate final judgment, destructive actions, secret handling, or broad edits.
+- Treat subagent output as evidence to verify, not as authoritative truth. The primary agent owns all edits and completion claims.
+- Use MCP servers when available for current external context: repository hosting for issues, PRs, and CI; documentation/context servers for library APIs; browser tools for rendered UI checks; and read-only database or observability servers for diagnostics.
+- Keep MCP usage read-only unless the user explicitly asks for mutation. If an MCP server is unavailable, continue with repo-local evidence and state the limitation.
+
 ## Repository Boundaries
 
 - Keep generated agent instructions synchronized with `scaffold-guard.toml`.
 - Do not add source, test, docs, or package scaffolding unless the user explicitly asks for it.
 - If the repository grows a package, app, or service layout later, update these instructions and validation commands in the same change.
+
+## Code and Documentation Guidance
+
+- If Python code is added, prefer typed public APIs and explicit data structures over untyped dictionaries.
+- Use dataclasses for internal structured state, `TypedDict` or typed mappings for stable payload shapes, and Pydantic only where runtime input validation is worth the dependency.
+- Add docstrings when behavior, invariants, side effects, or error handling are not obvious from names and types.
 
 ## Security and Secret Handling
 

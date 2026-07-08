@@ -10,5 +10,9 @@ alwaysApply: false
 
 - Use `uv run` for Python commands.
 - Keep all functions, methods, and public constants typed.
+- Use `dataclass(frozen=True, slots=True)` for internal structured state unless mutation is required.
+- Use `TypedDict` or typed mappings for stable JSON, TOML, API, or CLI payload shapes.
+- Use Pydantic only at runtime-validation boundaries where parse errors, coercion, or external input validation justify the dependency and complexity.
+- Add docstrings when behavior, invariants, side effects, or error handling are not obvious from names and types.
 - Do not add `Any`, `dict[str, Any]`, type ignores, or broad suppressions.
 - Split large modules by responsibility instead of raising lint limits.
