@@ -13,13 +13,14 @@ scaffold-guard check
 scaffold-guard inspect-diff
 scaffold-guard validate --quick
 scaffold-guard validate
-scaffold-guard publish --message "Update project" --all
+uv run scaffold-guard publish --message "Update project" --all
 ```
 
 `check` is the fast policy gate. `inspect-diff` tells you which validation
 evidence a change needs. `validate --quick` runs the generated quick gate.
-`validate` runs the full configured gate. `publish` validates, commits, and
-pushes an explicitly reviewed scope.
+`validate` runs the full configured gate. Repo-local
+`uv run scaffold-guard publish` validates, commits, and pushes an explicitly
+reviewed scope with the ScaffoldGuard version pinned by the generated project.
 
 ## `init`
 
@@ -127,15 +128,17 @@ Validate, commit, and push a generated project through an audited path that does
 not rely on raw `git commit` or `git push` prompts.
 
 ```bash
-scaffold-guard publish --message "Update project" --all
-scaffold-guard publish --message "Update docs" --file README.md --file docs/index.md
-scaffold-guard publish --push-only
+uv run scaffold-guard publish --message "Update project" --all
+uv run scaffold-guard publish --message "Update docs" --file README.md --file docs/index.md
+uv run scaffold-guard publish --push-only
 ```
 
-Use `publish` when an agent has explicit user approval to publish work,
-especially in Codex sessions where approval prompts are unavailable. By
-default, it runs the full configured validation gate before staging or pushing.
-Pass `--quick` only when the quick gate is the accepted validation scope.
+Use repo-local `uv run scaffold-guard publish` when an agent has explicit user
+approval to publish work, especially in Codex sessions where approval prompts
+are unavailable. This avoids stale global installs shadowing the generated
+project's pinned ScaffoldGuard version. By default, it runs the full configured
+validation gate before staging or pushing. Pass `--quick` only when the quick
+gate is the accepted validation scope.
 
 Safety behavior:
 

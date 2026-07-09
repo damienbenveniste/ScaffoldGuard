@@ -22,6 +22,7 @@ from scaffold_guard.scaffold import (
     with_quality_tools,
     write_rendered_files,
 )
+from scaffold_guard.versions import PUBLISH_CAPABLE_MINIMUM_VERSION
 
 MINIMUM_FORBIDDEN_GIT_RULES = 5
 
@@ -209,7 +210,7 @@ def test_typescript_template_specs_filter_python_adapter_rules(tmp_path: Path) -
     assert ".codex/rules/validation.rules" in destinations
     assert ".claude/rules/python.md" not in destinations
     assert ".cursor/rules/python.mdc" not in destinations
-    assert "pyproject.toml" not in destinations
+    assert "pyproject.toml" in destinations
 
 
 def test_typescript_template_specs_omit_disabled_optional_tool_files(tmp_path: Path) -> None:
@@ -324,6 +325,7 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
     hooks = rendered_by_path[Path(".codex/hooks.json")].content
     hook_payload = json.loads(hooks)
     git_rules = rendered_by_path[Path(".codex/rules/git.rules")].content
+    pyproject = rendered_by_path[Path("pyproject.toml")].content
     rules = rendered_by_path[Path(".codex/rules/validation.rules")].content
     implementation_worker = rendered_by_path[
         Path(".codex/agents/implementation-worker.toml")
@@ -358,10 +360,12 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
     assert "exit 0" in evidence_hook
     assert 'pattern = ["git", "commit"]' in git_rules
     assert 'pattern = ["git", "push"]' in git_rules
-    assert 'pattern = ["scaffold-guard", "publish"]' in git_rules
+    assert 'pattern = ["uv", "run", "scaffold-guard", "publish"]' in git_rules
+    assert 'pattern = ["scaffold-guard", "publish"]' not in git_rules
     assert 'decision = "prompt"' not in git_rules
     assert git_rules.count('decision = "forbidden"') >= MINIMUM_FORBIDDEN_GIT_RULES
     assert 'decision = "allow"' in git_rules
+    assert f'"scaffold-guard>={PUBLISH_CAPABLE_MINIMUM_VERSION}"' in pyproject
     assert 'pattern = ["uv", "run", "ruff", "check", "packages/python"]' in rules
     assert 'pattern = ["npm", "run", "ts:typecheck"]' in rules
 

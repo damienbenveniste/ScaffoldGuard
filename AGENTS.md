@@ -34,6 +34,12 @@ configuration change in this repository.
   automation, or automatic mutation of mature existing repositories. A guarded
   git commit/push wrapper is acceptable only when it validates, refuses mixed
   scope, and requires explicit user intent.
+- When generated instructions, Codex rules, CI, or docs depend on a
+  ScaffoldGuard command added after the initial release, define its minimum
+  supported ScaffoldGuard version in one shared code constant and render that
+  dependency floor into every generated project profile that can invoke it. Use
+  project-local `uv run scaffold-guard ...` command forms when stale global
+  installs could shadow the generated dependency.
 - Always generate `AGENTS.md` for scaffolded projects. Treat it as the shared
   cross-agent instruction source.
 - Keep adapter behavior explicit:

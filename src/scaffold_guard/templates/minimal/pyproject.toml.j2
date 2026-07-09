@@ -1,0 +1,14 @@
+[project]
+name = "{{ project_slug }}"
+version = "0.1.0"
+description = "{{ project_slug }} guarded by scaffold-guard."
+requires-python = ">={{ python_min }}"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "scaffold-guard>={{ publish_capable_minimum_version }}",
+]
+
+[tool.uv]
+package = false

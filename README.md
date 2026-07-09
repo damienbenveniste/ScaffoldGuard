@@ -131,6 +131,7 @@ my_project/
   .codex/rules/validation.rules
   README.md
   LICENSE
+  pyproject.toml
   scaffold-guard.toml
   .github/workflows/ci.yml  # or .gitlab-ci.yml
 ```
@@ -162,6 +163,7 @@ my_project/
   AGENTS.md
   README.md
   LICENSE
+  pyproject.toml
   package.json
   tsconfig.json
   tsconfig.build.json
@@ -205,8 +207,8 @@ project-scoped agent defaults, `.codex/rules/*.rules` handles command
 permission policy, and `.codex/hooks.json` runs generated hook commands for
 mechanical workflow evidence and checks around tool use through
 `.codex/hooks/workflow-evidence.sh`. Generated Codex git rules allow
-`scaffold-guard publish` as the audited approval-free commit and push path while
-protecting raw `git commit` and `git push`.
+repo-local `uv run scaffold-guard publish` as the audited approval-free commit
+and push path while protecting raw `git commit` and `git push`.
 
 ## Commands
 
@@ -215,15 +217,17 @@ scaffold-guard init [NAME] [--guided] [--profile minimal|python|typescript|monor
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]
-scaffold-guard publish [--path .] --message "Update project" [--all|--file PATH] [--remote origin] [--branch feature] [--quick]
+uv run scaffold-guard publish [--path .] --message "Update project" [--all|--file PATH] [--remote origin] [--branch feature] [--quick]
 scaffold-guard compile-rules [--path .] [--agent codex|claude|cursor|all] [--dry-run] [--force]
 scaffold-guard doctor [--path .] [--json]
 scaffold-guard version
 ```
 
-Use `scaffold-guard publish` only after an explicit user request to publish. It
-runs generated-project validation, refuses mixed staged and unstaged scope,
-commits with an explicit message, and pushes the reviewed branch.
+Use repo-local `uv run scaffold-guard publish --message "Update project" --all`
+only after an explicit user request to publish from a generated project. The
+repo-local invocation resolves the generated project's pinned ScaffoldGuard
+version, runs generated-project validation, refuses mixed staged and unstaged
+scope, commits with an explicit message, and pushes the reviewed branch.
 
 Profile choices:
 

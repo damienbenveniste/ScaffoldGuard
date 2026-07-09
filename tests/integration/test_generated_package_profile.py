@@ -15,6 +15,7 @@ import pytest
 from typer.testing import CliRunner
 
 from scaffold_guard.cli import app
+from scaffold_guard.versions import PUBLISH_CAPABLE_MINIMUM_VERSION
 
 SUCCESS = 0
 CONFIG_ERROR = 2
@@ -56,6 +57,7 @@ BASE_MINIMAL_FILES = {
     Path("AGENTS.md"),
     Path("README.md"),
     Path("LICENSE"),
+    Path("pyproject.toml"),
     Path(".gitignore"),
     Path(".github/workflows/ci.yml"),
     Path("scaffold-guard.toml"),
@@ -67,6 +69,7 @@ BASE_TYPESCRIPT_FILES = {
     Path("AGENTS.md"),
     Path("README.md"),
     Path("LICENSE"),
+    Path("pyproject.toml"),
     Path("package.json"),
     Path("tsconfig.json"),
     Path("tsconfig.build.json"),
@@ -112,6 +115,13 @@ class GreetingPackage(Protocol):
         ...
 
 
+def _assert_publish_capable_dependency(pyproject: dict[str, object]) -> None:
+    """Generated projects must pin a publish-capable ScaffoldGuard version."""
+    dependency_groups = cast("dict[str, list[str]]", pyproject["dependency-groups"])
+
+    assert f"scaffold-guard>={PUBLISH_CAPABLE_MINIMUM_VERSION}" in dependency_groups["dev"]
+
+
 def test_init_codex_generates_valid_package_tree(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -132,6 +142,7 @@ def test_init_codex_generates_valid_package_tree(
     mkdocs_config = (project_dir / "mkdocs.yml").read_text(encoding="utf-8")
     assert pyproject["tool"]["ruff"]["target-version"] == "py313"
     assert pyproject["tool"]["mypy"]["python_version"] == "3.13"
+    _assert_publish_capable_dependency(pyproject)
     assert config["project"]["profile"] == "python"
     assert 'site_name: "demo"' in mkdocs_config
     assert "docs_dir: docs" in mkdocs_config
@@ -168,7 +179,9 @@ def test_init_accepts_legacy_package_profile_alias(
     assert result.exit_code == SUCCESS, result.output
     project_dir = tmp_path / "demo"
     config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    pyproject = tomllib.loads((project_dir / "pyproject.toml").read_text(encoding="utf-8"))
     assert config["project"]["profile"] == "python"
+    _assert_publish_capable_dependency(pyproject)
     assert (project_dir / "src/demo/core.py").exists()
     assert "Created ScaffoldGuard python project: demo" in result.output
 
@@ -289,12 +302,14 @@ def test_init_can_generate_typescript_profile(
     assert result.exit_code == SUCCESS, result.output
     project_dir = tmp_path / "demo"
     assert _relative_files(project_dir) == BASE_TYPESCRIPT_FILES
-    assert not (project_dir / "pyproject.toml").exists()
     assert not (project_dir / ".claude").exists()
     assert not (project_dir / ".cursor").exists()
+    pyproject = tomllib.loads((project_dir / "pyproject.toml").read_text(encoding="utf-8"))
     package_json = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))
     config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
     _assert_json_has_no_blank_lines(project_dir / "package.json")
+    _assert_publish_capable_dependency(pyproject)
+    assert pyproject["tool"]["uv"]["package"] is False
     assert package_json["scripts"]["typecheck"] == "tsc --noEmit"
     assert package_json["devDependencies"]["@biomejs/biome"].startswith("^2.")
     assert config["project"]["profile"] == "typescript"
@@ -815,8 +830,8 @@ def test_init_all_generates_all_adapter_files(
     project_dir = tmp_path / "demo"
     files = _relative_files(project_dir)
     assert BASE_MINIMAL_FILES.issubset(files)
-    assert Path("pyproject.toml") not in files
     assert Path("src/demo/core.py") not in files
+    pyproject = tomllib.loads((project_dir / "pyproject.toml").read_text(encoding="utf-8"))
     assert Path("CLAUDE.md") in files
     assert Path(".claude/rules/testing.md") in files
     assert Path(".cursor/rules/testing.mdc") in files
@@ -833,13 +848,17 @@ def test_init_all_generates_all_adapter_files(
     assert "Use read-only subagents for bounded work" in agents
     assert "Use dataclasses for internal structured state" in agents
     assert "TypedDict" in agents
-    assert 'pattern = ["scaffold-guard", "publish"]' in codex_git_rules
+    _assert_publish_capable_dependency(pyproject)
+    assert pyproject["tool"]["uv"]["package"] is False
+    assert 'pattern = ["uv", "run", "scaffold-guard", "publish"]' in codex_git_rules
+    assert 'pattern = ["scaffold-guard", "publish"]' not in codex_git_rules
     assert 'pattern = ["git", "commit"]' in codex_git_rules
     assert 'pattern = ["git", "push"]' in codex_git_rules
     assert 'decision = "prompt"' not in codex_git_rules
-    assert "scaffold-guard publish --message" in agents
-    assert "scaffold-guard publish --message" in claude_git_rules
-    assert "scaffold-guard publish --message" in cursor_git_rules
+    assert "uv run scaffold-guard publish --message" in agents
+    assert "raw `git commit` or `git push` as the approval-free path" in agents
+    assert "uv run scaffold-guard publish --message" in claude_git_rules
+    assert "uv run scaffold-guard publish --message" in cursor_git_rules
     assert "Claude Code: CLAUDE.md + .claude/rules/" in result.output
     assert "Cursor: .cursor/rules/*.mdc + AGENTS.md" in result.output
     assert ".codex/agents/*.toml" in result.output
