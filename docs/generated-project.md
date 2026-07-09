@@ -13,6 +13,7 @@ my_project/
   .codex/rules/validation.rules
   README.md
   LICENSE
+  pyproject.toml
   .gitignore
   scaffold-guard.toml
   .github/workflows/ci.yml  # or .gitlab-ci.yml
@@ -69,9 +70,10 @@ The Codex files are layered: `AGENTS.md` remains behavioral guidance,
 `.codex/rules/*.rules` handles command permission policy, and
 `.codex/hooks.json` runs generated hook commands for mechanical workflow
 evidence and checks around tool use through `.codex/hooks/workflow-evidence.sh`.
-Generated Codex git rules allow `scaffold-guard publish` for intentional
-approval-free commits and pushes. Raw `git commit` and `git push` are protected
-so publishing does not depend on approval prompts that may be unavailable.
+Generated Codex git rules allow repo-local
+`uv run scaffold-guard publish` for intentional approval-free commits and
+pushes. Raw `git commit` and `git push` are protected so publishing does not
+depend on approval prompts that may be unavailable.
 
 The `typescript` profile creates a TypeScript package with npm scripts,
 TypeScript, configurable compiler strictness, optional Biome, optional Vitest,
@@ -82,6 +84,7 @@ my_project/
   AGENTS.md
   README.md
   LICENSE
+  pyproject.toml
   package.json
   tsconfig.json
   tsconfig.build.json
@@ -174,13 +177,15 @@ required for a specific change.
 ## Publishing
 
 When the user explicitly approves publishing from a generated project, use the
-audited wrapper instead of raw git commit and push commands:
+audited repo-local wrapper instead of raw git commit and push commands:
 
 ```bash
-scaffold-guard publish --message "Update project" --all
+uv run scaffold-guard publish --message "Update project" --all
 ```
 
-Use repeated `--file PATH` options for an exact dirty-file scope, or
-`--push-only` only when the working tree is clean and existing commits need to
-be pushed. The command runs generated validation first, refuses mixed staged and
-unstaged scope, then commits and pushes the reviewed scope.
+The repo-local invocation uses the ScaffoldGuard version pinned by the generated
+project, avoiding stale global installs during approval-free publishing. Use
+repeated `--file PATH` options for an exact dirty-file scope, or `--push-only`
+only when the working tree is clean and existing commits need to be pushed. The
+command runs generated validation first, refuses mixed staged and unstaged
+scope, then commits and pushes the reviewed scope.

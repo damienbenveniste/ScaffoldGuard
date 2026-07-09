@@ -175,7 +175,6 @@ def test_generated_project_config_loads_minimal_profile(
 
     assert config.profile == "minimal"
     assert options.profile == "minimal"
-    assert not (project_dir / "pyproject.toml").exists()
     assert not (project_dir / "src").exists()
 
 

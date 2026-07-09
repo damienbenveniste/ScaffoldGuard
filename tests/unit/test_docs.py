@@ -22,7 +22,17 @@ def test_public_install_docs_use_installed_scaffold_guard_command() -> None:
 
         assert "uv tool install scaffold-guard" in content
         assert "uvx" not in content
+
+    for path in (Path("docs/index.md"), Path("docs/quickstart.md")):
+        content = path.read_text(encoding="utf-8")
+
         assert "uv run scaffold-guard" not in content
+
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "uv run scaffold-guard init" not in readme
+    assert "uv run scaffold-guard check" not in readme
+    assert "uv run scaffold-guard validate" not in readme
 
 
 def test_codex_adapter_docs_describe_layered_file_responsibilities() -> None:

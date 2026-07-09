@@ -53,7 +53,8 @@ def test_compile_rules_is_idempotent_and_reports_selected_files(
     assert agents_path.read_text(encoding="utf-8") == initial_content
     assert agents_path.read_text(encoding="utf-8").count(GENERATED_MARKER) == 1
     git_rules = (project_dir / ".codex/rules/git.rules").read_text(encoding="utf-8")
-    assert 'pattern = ["scaffold-guard", "publish"]' in git_rules
+    assert 'pattern = ["uv", "run", "scaffold-guard", "publish"]' in git_rules
+    assert 'pattern = ["scaffold-guard", "publish"]' not in git_rules
     assert 'decision = "prompt"' not in git_rules
 
 

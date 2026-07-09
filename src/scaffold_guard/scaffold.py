@@ -23,6 +23,7 @@ from scaffold_guard.models import (
     profile_includes_python,
 )
 from scaffold_guard.renderer import TemplateRenderer
+from scaffold_guard.versions import PUBLISH_CAPABLE_MINIMUM_VERSION
 
 PROJECT_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 PYTHON_MINOR_VERSION_PATTERN: re.Pattern[str] = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)$")
@@ -58,6 +59,7 @@ MINIMAL_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("minimal/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("minimal/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
+    TemplateSpec("minimal/pyproject.toml.j2", "pyproject.toml"),
     TemplateSpec("minimal/gitignore.j2", ".gitignore"),
     TemplateSpec("minimal/scaffold-guard.toml.j2", "scaffold-guard.toml"),
 )
@@ -71,6 +73,7 @@ TYPESCRIPT_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
     TemplateSpec("typescript/AGENTS.md.j2", "AGENTS.md"),
     TemplateSpec("typescript/README.md.j2", "README.md"),
     TemplateSpec("package/LICENSE.j2", "LICENSE"),
+    TemplateSpec("typescript/pyproject.toml.j2", "pyproject.toml"),
     TemplateSpec("typescript/package.json.j2", "package.json"),
     TemplateSpec("typescript/tsconfig.json.j2", "tsconfig.json"),
     TemplateSpec("typescript/tsconfig.build.json.j2", "tsconfig.build.json"),
@@ -275,6 +278,7 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "profile": options.profile,
         "license": options.license,
         "python_min": options.python_min,
+        "publish_capable_minimum_version": PUBLISH_CAPABLE_MINIMUM_VERSION,
         "ruff_target_version": _ruff_target_version(options.python_min),
         "coverage": options.coverage,
         "ci_provider": options.ci,

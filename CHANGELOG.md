@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 - 2026-07-08
+
+- Fixed generated Codex publish policy templates to allow the audited
+  `scaffold-guard publish` path only when the generated project depends on a
+  ScaffoldGuard version that includes that command.
+
 ## 0.1.3 - 2026-07-08
 
 - Added `scaffold-guard publish` as an audited generated-project commit and
