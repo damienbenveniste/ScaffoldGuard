@@ -1,6 +1,9 @@
 """Unit tests for generated-project checkers."""
 
 import os
+import subprocess
+import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,7 +24,14 @@ from scaffold_guard.checks.generated_files import check_generated_files
 from scaffold_guard.checks.project_health import check_project_health
 from scaffold_guard.checks.runner import run_checks
 from scaffold_guard.checks.unsafe_patterns import check_unsafe_patterns
-from scaffold_guard.models import CiChoice, ProfileChoice, PythonQualityMode, PythonTypechecker
+from scaffold_guard.manifest import MANIFEST_RELATIVE_PATH, load_manifest, write_manifest
+from scaffold_guard.models import (
+    AdapterSelection,
+    CiChoice,
+    ProfileChoice,
+    PythonQualityMode,
+    PythonTypechecker,
+)
 from scaffold_guard.scaffold import build_init_options, scaffold_package_project, with_quality_tools
 
 PythonQualitySelection = tuple[PythonQualityMode, PythonQualityMode, PythonTypechecker]
@@ -60,6 +70,23 @@ def test_run_checks_fails_missing_project_path(tmp_path: Path) -> None:
         run_checks(missing)
 
 
+def test_project_config_import_smoke_has_no_check_cycle() -> None:
+    """Importing project_config must not cycle through project health checks."""
+    result = subprocess.run(
+        (
+            sys.executable,
+            "-c",
+            "import scaffold_guard.project_config; print('ok')",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"
+
+
 def test_run_checks_fails_file_path(tmp_path: Path) -> None:
     """A file cannot be checked as a project root."""
     file_path = tmp_path / "file.txt"
@@ -92,11 +119,208 @@ def test_project_health_ignores_codex_adapter_when_codex_is_disabled(tmp_path: P
     """Codex-specific health checks follow the generated adapter flag."""
     project_dir = _generated_project(tmp_path)
     _replace_text(project_dir / "scaffold-guard.toml", "codex = true", "codex = false")
+    _set_manifest_adapters(project_dir, ("claude", "cursor"))
     (project_dir / ".codex/config.toml").unlink()
 
     result = check_project_health(project_dir)
 
     assert result.ok
+
+
+def test_project_health_warns_for_present_orphan_manifest_record(tmp_path: Path) -> None:
+    """Deselected managed files left in place are reported as orphan warnings."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(
+        project_dir / "scaffold-guard.toml",
+        "github_actions = true",
+        "github_actions = false",
+    )
+
+    result = check_project_health(project_dir)
+
+    assert result.ok
+    assert (project_dir / ".github/workflows/ci.yml").exists()
+    assert any(
+        item.path == ".github/workflows/ci.yml"
+        and item.code == "manifest-file-orphan"
+        and item.severity == "warning"
+        for item in result.findings
+    )
+
+
+def test_project_health_warns_for_missing_orphan_manifest_record(tmp_path: Path) -> None:
+    """Deselected managed files already absent remain non-failing orphan warnings."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(
+        project_dir / "scaffold-guard.toml",
+        "github_actions = true",
+        "github_actions = false",
+    )
+    _remove_tree(project_dir / ".github")
+
+    result = check_project_health(project_dir)
+
+    assert result.ok
+    assert not (project_dir / ".github/workflows/ci.yml").exists()
+    assert any(
+        item.path == ".github/workflows/ci.yml"
+        and item.code == "manifest-file-orphan"
+        and item.severity == "warning"
+        for item in result.findings
+    )
+
+
+def test_project_health_keeps_manifest_metadata_mismatch_as_error(tmp_path: Path) -> None:
+    """Adapter selection changes require matching manifest metadata."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(project_dir / "scaffold-guard.toml", "codex = true", "codex = false")
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(
+        item.code == "manifest-config-mismatch" and item.severity == "error"
+        for item in result.findings
+    )
+
+
+def test_project_health_errors_for_selected_manifest_file_missing(tmp_path: Path) -> None:
+    """A selected managed record remains an error when its file is missing."""
+    project_dir = _generated_project(tmp_path)
+    target = project_dir / ".claude/rules/testing.md"
+    target.unlink()
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(
+        item.path == ".claude/rules/testing.md"
+        and item.code == "manifest-file-missing"
+        and item.severity == "error"
+        for item in result.findings
+    )
+
+
+def test_project_health_errors_for_selected_manifest_file_drift(tmp_path: Path) -> None:
+    """A selected managed record remains an error when its bytes drift."""
+    project_dir = _generated_project(tmp_path)
+    target = project_dir / ".claude/rules/testing.md"
+    target.write_bytes(target.read_bytes() + b"# edited\n")
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(
+        item.path == ".claude/rules/testing.md"
+        and item.code == "manifest-file-drift"
+        and item.severity == "error"
+        for item in result.findings
+    )
+
+
+def test_project_health_legacy_metadata_allows_existing_manifest(tmp_path: Path) -> None:
+    """Legacy metadata does not apply v0.2 manifest integrity checks when one is present."""
+    project_dir = _generated_project(tmp_path)
+    _remove_scaffold_guard_metadata(project_dir / "scaffold-guard.toml")
+
+    result = check_project_health(project_dir)
+
+    assert result.ok
+    assert not any(item.code.startswith("manifest-") for item in result.findings)
+
+
+def test_project_health_warns_for_manifestless_legacy_metadata(tmp_path: Path) -> None:
+    """A valid legacy config without a manifest receives non-failing upgrade guidance."""
+    project_dir = _generated_project(tmp_path)
+    _remove_scaffold_guard_metadata(project_dir / "scaffold-guard.toml")
+    (project_dir / MANIFEST_RELATIVE_PATH).unlink()
+
+    result = check_project_health(project_dir)
+
+    assert result.ok
+    assert any(
+        item.code == "legacy-manifest-missing" and item.severity == "warning"
+        for item in result.findings
+    )
+
+
+def test_project_health_errors_for_missing_v02_manifest(tmp_path: Path) -> None:
+    """Versioned generated metadata requires a managed-file manifest."""
+    project_dir = _generated_project(tmp_path)
+    (project_dir / MANIFEST_RELATIVE_PATH).unlink()
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(item.code == "manifest-missing" for item in result.findings)
+
+
+def test_project_health_errors_for_malformed_manifest(tmp_path: Path) -> None:
+    """Malformed managed-file manifest JSON is a health error."""
+    project_dir = _generated_project(tmp_path)
+    (project_dir / MANIFEST_RELATIVE_PATH).write_text("{not-json", encoding="utf-8")
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(item.code == "manifest-invalid" for item in result.findings)
+
+
+def test_project_health_errors_for_selected_manifest_record_omission(tmp_path: Path) -> None:
+    """The manifest must record every managed path selected by current config."""
+    project_dir = _generated_project(tmp_path)
+    manifest_path = project_dir / MANIFEST_RELATIVE_PATH
+    manifest = load_manifest(manifest_path)
+    write_manifest(
+        manifest_path,
+        replace(
+            manifest,
+            files=tuple(file for file in manifest.files if file.path != ".claude/rules/testing.md"),
+        ),
+    )
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(
+        item.path == ".claude/rules/testing.md" and item.code == "manifest-record-missing"
+        for item in result.findings
+    )
+
+
+def test_project_health_errors_for_selected_managed_symlink(tmp_path: Path) -> None:
+    """A selected manifest record cannot resolve through a symbolic-link file."""
+    project_dir = _generated_project(tmp_path)
+    target = project_dir / ".claude/rules/testing.md"
+    external = tmp_path / "external-rule.md"
+    external.write_bytes(target.read_bytes())
+    target.unlink()
+    target.symlink_to(external)
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(
+        item.path == ".claude/rules/testing.md" and item.code == "manifest-file-invalid"
+        for item in result.findings
+    )
+
+
+def test_project_health_errors_for_symlinked_managed_parent(tmp_path: Path) -> None:
+    """Selected managed files cannot be reached through a symlinked parent directory."""
+    project_dir = _generated_project(tmp_path)
+    codex_dir = project_dir / ".codex"
+    internal_codex = project_dir / "local-codex"
+    codex_dir.rename(internal_codex)
+    codex_dir.symlink_to(internal_codex, target_is_directory=True)
+
+    result = check_project_health(project_dir)
+
+    assert not result.ok
+    assert any(
+        item.path.startswith(".codex/") and item.code == "manifest-file-invalid"
+        for item in result.findings
+    )
 
 
 def test_tool_enabled_reads_mode_aware_python_tool_config(tmp_path: Path) -> None:
@@ -783,15 +1007,46 @@ def test_config_consistency_detects_codex_mismatch(tmp_path: Path) -> None:
     assert any(finding.path == ".codex/hooks.json" for finding in result.findings)
 
 
-def test_config_consistency_detects_disabled_codex_with_adapter_files(tmp_path: Path) -> None:
-    """Codex-disabled config must not keep generated `.codex` adapter files."""
+def test_config_consistency_warns_for_disabled_codex_with_adapter_files(tmp_path: Path) -> None:
+    """Deselected Codex files are non-failing upgrade orphans."""
     project_dir = _generated_project(tmp_path)
     _replace_text(project_dir / "scaffold-guard.toml", "codex = true", "codex = false")
 
     result = check_config_consistency(project_dir)
 
-    assert not result.ok
-    assert any(finding.path == ".codex" for finding in result.findings)
+    assert result.ok
+    assert any(
+        item.path == ".codex" and item.code == "agent-config-orphan" and item.severity == "warning"
+        for item in result.findings
+    )
+
+
+@pytest.mark.parametrize(
+    ("config_key", "orphan_path"),
+    [("claude", ".claude"), ("cursor", ".cursor")],
+)
+def test_config_consistency_warns_for_disabled_adapter_remnants(
+    tmp_path: Path,
+    config_key: str,
+    orphan_path: str,
+) -> None:
+    """Deselected Claude and Cursor files remain warning-level orphans."""
+    project_dir = _generated_project(tmp_path)
+    _replace_text(
+        project_dir / "scaffold-guard.toml",
+        f"{config_key} = true",
+        f"{config_key} = false",
+    )
+
+    result = check_config_consistency(project_dir)
+
+    assert result.ok
+    assert any(
+        item.path == orphan_path
+        and item.code == "agent-config-orphan"
+        and item.severity == "warning"
+        for item in result.findings
+    )
 
 
 def test_config_consistency_detects_python_and_coverage_mismatch(tmp_path: Path) -> None:
@@ -907,6 +1162,24 @@ def _generated_project(
 def _replace_text(path: Path, old: str, new: str) -> None:
     """Replace text in a UTF-8 file."""
     path.write_text(path.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+
+
+def _set_manifest_adapters(
+    project_dir: Path,
+    adapters: tuple[AdapterSelection, ...],
+) -> None:
+    """Update manifest adapter metadata while preserving its managed records."""
+    manifest_path = project_dir / MANIFEST_RELATIVE_PATH
+    manifest = load_manifest(manifest_path)
+    write_manifest(manifest_path, replace(manifest, adapters=adapters))
+
+
+def _remove_scaffold_guard_metadata(path: Path) -> None:
+    """Remove the versioned metadata table from a generated config fixture."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = lines.index("[scaffold_guard]")
+    end = lines.index("[agents]")
+    path.write_text("\n".join((*lines[:start], *lines[end:])) + "\n", encoding="utf-8")
 
 
 def _remove_tree(path: Path) -> None:

@@ -30,6 +30,9 @@ These rules apply to every code, documentation, and configuration change in this
 ## Repository Boundaries
 
 - Keep generated agent instructions synchronized with `scaffold-guard.toml`.
+- `uv run scaffold-guard upgrade` is safe to run as a preview. Do not run
+  `uv run scaffold-guard upgrade --apply` unless the user explicitly asks for
+  the apply step and you have reviewed the generated upgrade plan.
 - Do not add source, test, docs, or package scaffolding unless the user explicitly asks for it.
 - If the repository grows a package, app, or service layout later, update these instructions and validation commands in the same change.
 

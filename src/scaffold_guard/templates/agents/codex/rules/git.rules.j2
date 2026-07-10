@@ -36,6 +36,16 @@ prefix_rule(
 )
 
 prefix_rule(
+    pattern = ["uv", "run", "scaffold-guard", "upgrade"],
+    decision = "allow",
+    justification = "Repo-local ScaffoldGuard upgrade preview is safe; applying the plan requires explicit user intent and review.",
+    match = [
+        "uv run scaffold-guard upgrade",
+        "uv run scaffold-guard upgrade --apply",
+    ],
+)
+
+prefix_rule(
     pattern = ["uv", "run", "scaffold-guard", "publish"],
     decision = "allow",
     justification = "Publishing through ScaffoldGuard runs validation, refuses mixed scope, and commits only an explicit reviewed selection.",

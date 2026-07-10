@@ -6,8 +6,21 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from scaffold_guard.adapters import adapters_for
-from scaffold_guard.fs import ensure_relative_safe_path, is_within_directory, write_text_safely
+from scaffold_guard import __version__
+from scaffold_guard.adapters import adapters_for_selection
+from scaffold_guard.fs import (
+    ensure_relative_safe_path,
+    has_symlink_component,
+    is_within_directory,
+    write_text_safely,
+)
+from scaffold_guard.manifest import (
+    MANIFEST_RELATIVE_PATH,
+    ManifestFile,
+    ProjectManifest,
+    content_sha256,
+    manifest_json,
+)
 from scaffold_guard.models import (
     SUPPORTED_PROFILES,
     AgentChoice,
@@ -18,137 +31,174 @@ from scaffold_guard.models import (
     PythonQualityMode,
     PythonTypechecker,
     ScaffoldSummary,
+    TemplateLifecycle,
     TemplateSpec,
     normalize_profile_choice,
     profile_includes_python,
 )
 from scaffold_guard.renderer import TemplateRenderer
-from scaffold_guard.versions import PUBLISH_CAPABLE_MINIMUM_VERSION
+from scaffold_guard.versions import (
+    GENERATED_PROJECT_MINIMUM_VERSION,
+    MANIFEST_VERSION,
+    PROJECT_FORMAT_VERSION,
+)
 
 PROJECT_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 PYTHON_MINOR_VERSION_PATTERN: re.Pattern[str] = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)$")
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
+
+def _spec(
+    template_name: str,
+    destination: str,
+    lifecycle: TemplateLifecycle | None = None,
+) -> TemplateSpec:
+    """Return a fully identified template spec."""
+    return TemplateSpec(
+        template_id=template_name.removesuffix(".j2"),
+        template_name=template_name,
+        destination=destination,
+        lifecycle=lifecycle or _classify_lifecycle(destination),
+    )
+
+
+def _classify_lifecycle(destination: str) -> TemplateLifecycle:
+    """Classify a generated destination for lifecycle tracking."""
+    managed_destinations = {"AGENTS.md", "CLAUDE.md", ".gitlab-ci.yml"}
+    managed_prefixes = (".codex/", ".claude/", ".cursor/", ".github/workflows/")
+    if destination in managed_destinations or destination.startswith(managed_prefixes):
+        return "managed"
+    if destination in {
+        "biome.json",
+        "mkdocs.yml",
+        "package.json",
+        "pyproject.toml",
+        "pyrightconfig.json",
+        "scaffold-guard.toml",
+        "tsconfig.build.json",
+        "tsconfig.json",
+        "vitest.config.ts",
+        "packages/typescript/package.json",
+        "packages/typescript/tsconfig.build.json",
+        "packages/typescript/tsconfig.json",
+        "packages/typescript/vitest.config.ts",
+    }:
+        return "structured"
+    return "seed"
+
+
 PACKAGE_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("package/AGENTS.md.j2", "AGENTS.md"),
-    TemplateSpec("package/README.md.j2", "README.md"),
-    TemplateSpec("package/LICENSE.j2", "LICENSE"),
-    TemplateSpec("package/pyproject.toml.j2", "pyproject.toml"),
-    TemplateSpec("package/mkdocs.yml.j2", "mkdocs.yml"),
-    TemplateSpec("package/gitignore.j2", ".gitignore"),
-    TemplateSpec("package/scaffold-guard.toml.j2", "scaffold-guard.toml"),
-    TemplateSpec("package/docs/index.md.j2", "docs/index.md"),
-    TemplateSpec("package/examples/hello.py.j2", "examples/hello.py"),
-    TemplateSpec("package/src/package/__init__.py.j2", "src/{package_name}/__init__.py"),
-    TemplateSpec("package/src/package/core.py.j2", "src/{package_name}/core.py"),
-    TemplateSpec("package/src/package/py.typed.j2", "src/{package_name}/py.typed"),
-    TemplateSpec("package/tests/unit/test_core.py.j2", "tests/unit/test_core.py"),
-    TemplateSpec(
+    _spec("package/AGENTS.md.j2", "AGENTS.md"),
+    _spec("package/README.md.j2", "README.md"),
+    _spec("package/LICENSE.j2", "LICENSE"),
+    _spec("package/pyproject.toml.j2", "pyproject.toml"),
+    _spec("package/mkdocs.yml.j2", "mkdocs.yml"),
+    _spec("package/gitignore.j2", ".gitignore"),
+    _spec("package/scaffold-guard.toml.j2", "scaffold-guard.toml"),
+    _spec("package/docs/index.md.j2", "docs/index.md"),
+    _spec("package/examples/hello.py.j2", "examples/hello.py"),
+    _spec("package/src/package/__init__.py.j2", "src/{package_name}/__init__.py"),
+    _spec("package/src/package/core.py.j2", "src/{package_name}/core.py"),
+    _spec("package/src/package/py.typed.j2", "src/{package_name}/py.typed"),
+    _spec("package/tests/unit/test_core.py.j2", "tests/unit/test_core.py"),
+    _spec(
         "package/tests/integration/test_import_package.py.j2",
         "tests/integration/test_import_package.py",
     ),
 )
 PACKAGE_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("package/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
-    TemplateSpec("package/github/workflows/docs.yml.j2", ".github/workflows/docs.yml"),
+    _spec("package/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
+    _spec("package/github/workflows/docs.yml.j2", ".github/workflows/docs.yml"),
 )
 PACKAGE_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("package/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+    _spec("package/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
 )
 MINIMAL_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("minimal/AGENTS.md.j2", "AGENTS.md"),
-    TemplateSpec("minimal/README.md.j2", "README.md"),
-    TemplateSpec("package/LICENSE.j2", "LICENSE"),
-    TemplateSpec("minimal/pyproject.toml.j2", "pyproject.toml"),
-    TemplateSpec("minimal/gitignore.j2", ".gitignore"),
-    TemplateSpec("minimal/scaffold-guard.toml.j2", "scaffold-guard.toml"),
+    _spec("minimal/AGENTS.md.j2", "AGENTS.md"),
+    _spec("minimal/README.md.j2", "README.md"),
+    _spec("package/LICENSE.j2", "LICENSE"),
+    _spec("minimal/pyproject.toml.j2", "pyproject.toml"),
+    _spec("minimal/gitignore.j2", ".gitignore"),
+    _spec("minimal/scaffold-guard.toml.j2", "scaffold-guard.toml"),
 )
 MINIMAL_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("minimal/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
+    _spec("minimal/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
 MINIMAL_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("minimal/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+    _spec("minimal/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
 )
 TYPESCRIPT_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("typescript/AGENTS.md.j2", "AGENTS.md"),
-    TemplateSpec("typescript/README.md.j2", "README.md"),
-    TemplateSpec("package/LICENSE.j2", "LICENSE"),
-    TemplateSpec("typescript/pyproject.toml.j2", "pyproject.toml"),
-    TemplateSpec("typescript/package.json.j2", "package.json"),
-    TemplateSpec("typescript/tsconfig.json.j2", "tsconfig.json"),
-    TemplateSpec("typescript/tsconfig.build.json.j2", "tsconfig.build.json"),
-    TemplateSpec("typescript/biome.json.j2", "biome.json"),
-    TemplateSpec("typescript/vitest.config.ts.j2", "vitest.config.ts"),
-    TemplateSpec("typescript/gitignore.j2", ".gitignore"),
-    TemplateSpec("typescript/scaffold-guard.toml.j2", "scaffold-guard.toml"),
-    TemplateSpec("typescript/src/index.ts.j2", "src/index.ts"),
-    TemplateSpec("typescript/tests/index.test.ts.j2", "tests/index.test.ts"),
+    _spec("typescript/AGENTS.md.j2", "AGENTS.md"),
+    _spec("typescript/README.md.j2", "README.md"),
+    _spec("package/LICENSE.j2", "LICENSE"),
+    _spec("typescript/pyproject.toml.j2", "pyproject.toml"),
+    _spec("typescript/package.json.j2", "package.json"),
+    _spec("typescript/tsconfig.json.j2", "tsconfig.json"),
+    _spec("typescript/tsconfig.build.json.j2", "tsconfig.build.json"),
+    _spec("typescript/biome.json.j2", "biome.json"),
+    _spec("typescript/vitest.config.ts.j2", "vitest.config.ts"),
+    _spec("typescript/gitignore.j2", ".gitignore"),
+    _spec("typescript/scaffold-guard.toml.j2", "scaffold-guard.toml"),
+    _spec("typescript/src/index.ts.j2", "src/index.ts"),
+    _spec("typescript/tests/index.test.ts.j2", "tests/index.test.ts"),
 )
 TYPESCRIPT_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("typescript/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
+    _spec("typescript/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
 TYPESCRIPT_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("typescript/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+    _spec("typescript/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
 )
 MONOREPO_BASE_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("monorepo/AGENTS.md.j2", "AGENTS.md"),
-    TemplateSpec("monorepo/README.md.j2", "README.md"),
-    TemplateSpec("package/LICENSE.j2", "LICENSE"),
-    TemplateSpec("monorepo/pyproject.toml.j2", "pyproject.toml"),
-    TemplateSpec("monorepo/package.json.j2", "package.json"),
-    TemplateSpec("monorepo/biome.json.j2", "biome.json"),
-    TemplateSpec("monorepo/gitignore.j2", ".gitignore"),
-    TemplateSpec("monorepo/scaffold-guard.toml.j2", "scaffold-guard.toml"),
-    TemplateSpec(
-        "monorepo/packages/python/examples/hello.py.j2", "packages/python/examples/hello.py"
-    ),
-    TemplateSpec(
+    _spec("monorepo/AGENTS.md.j2", "AGENTS.md"),
+    _spec("monorepo/README.md.j2", "README.md"),
+    _spec("package/LICENSE.j2", "LICENSE"),
+    _spec("monorepo/pyproject.toml.j2", "pyproject.toml"),
+    _spec("monorepo/package.json.j2", "package.json"),
+    _spec("monorepo/biome.json.j2", "biome.json"),
+    _spec("monorepo/gitignore.j2", ".gitignore"),
+    _spec("monorepo/scaffold-guard.toml.j2", "scaffold-guard.toml"),
+    _spec("monorepo/packages/python/examples/hello.py.j2", "packages/python/examples/hello.py"),
+    _spec(
         "monorepo/packages/python/src/package/__init__.py.j2",
         "packages/python/src/{package_name}/__init__.py",
     ),
-    TemplateSpec(
+    _spec(
         "monorepo/packages/python/src/package/core.py.j2",
         "packages/python/src/{package_name}/core.py",
     ),
-    TemplateSpec(
+    _spec(
         "monorepo/packages/python/src/package/py.typed.j2",
         "packages/python/src/{package_name}/py.typed",
     ),
-    TemplateSpec(
+    _spec(
         "monorepo/packages/python/tests/unit/test_core.py.j2",
         "packages/python/tests/unit/test_core.py",
     ),
-    TemplateSpec(
+    _spec(
         "monorepo/packages/python/tests/integration/test_import_package.py.j2",
         "packages/python/tests/integration/test_import_package.py",
     ),
-    TemplateSpec(
-        "monorepo/packages/typescript/package.json.j2", "packages/typescript/package.json"
-    ),
-    TemplateSpec(
-        "monorepo/packages/typescript/tsconfig.json.j2", "packages/typescript/tsconfig.json"
-    ),
-    TemplateSpec(
+    _spec("monorepo/packages/typescript/package.json.j2", "packages/typescript/package.json"),
+    _spec("monorepo/packages/typescript/tsconfig.json.j2", "packages/typescript/tsconfig.json"),
+    _spec(
         "monorepo/packages/typescript/tsconfig.build.json.j2",
         "packages/typescript/tsconfig.build.json",
     ),
-    TemplateSpec(
+    _spec(
         "monorepo/packages/typescript/vitest.config.ts.j2",
         "packages/typescript/vitest.config.ts",
     ),
-    TemplateSpec(
-        "monorepo/packages/typescript/src/index.ts.j2", "packages/typescript/src/index.ts"
-    ),
-    TemplateSpec(
+    _spec("monorepo/packages/typescript/src/index.ts.j2", "packages/typescript/src/index.ts"),
+    _spec(
         "monorepo/packages/typescript/tests/index.test.ts.j2",
         "packages/typescript/tests/index.test.ts",
     ),
 )
 MONOREPO_GITHUB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("monorepo/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
+    _spec("monorepo/github/workflows/ci.yml.j2", ".github/workflows/ci.yml"),
 )
 MONOREPO_GITLAB_TEMPLATE_SPECS: tuple[TemplateSpec, ...] = (
-    TemplateSpec("monorepo/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
+    _spec("monorepo/gitlab-ci.yml.j2", ".gitlab-ci.yml"),
 )
 CONFLICT_DISPLAY_LIMIT: int = 5
 
@@ -159,7 +209,8 @@ class RenderedFile:
 
     path: Path
     content: str
-    generated: bool = True
+    template_id: str = "manual/rendered-file"
+    lifecycle: TemplateLifecycle = "managed"
 
 
 def normalize_project_name(name: str) -> tuple[str, str]:
@@ -278,7 +329,7 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "profile": options.profile,
         "license": options.license,
         "python_min": options.python_min,
-        "publish_capable_minimum_version": PUBLISH_CAPABLE_MINIMUM_VERSION,
+        "generated_project_minimum_version": GENERATED_PROJECT_MINIMUM_VERSION,
         "ruff_target_version": _ruff_target_version(options.python_min),
         "coverage": options.coverage,
         "ci_provider": options.ci,
@@ -311,6 +362,9 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "ci_enabled": _toml_bool(ci_enabled),
         "github_actions_enabled": _toml_bool(github_actions_enabled),
         "gitlab_ci_enabled": _toml_bool(gitlab_ci_enabled),
+        "scaffold_guard_version": __version__,
+        "generated_project_minimum_specifier": f">={GENERATED_PROJECT_MINIMUM_VERSION}",
+        "project_format_version": PROJECT_FORMAT_VERSION,
     }
 
 
@@ -319,6 +373,8 @@ def render_file(
     *,
     template_name: str,
     destination: str,
+    template_id: str,
+    lifecycle: TemplateLifecycle,
     context: Mapping[str, object],
 ) -> RenderedFile:
     """Render one packaged template into a destination file model."""
@@ -326,6 +382,8 @@ def render_file(
     return RenderedFile(
         path=relative_destination,
         content=renderer.render(template_name, context),
+        template_id=template_id,
+        lifecycle=lifecycle,
     )
 
 
@@ -340,12 +398,12 @@ def package_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
     ):
         profile_specs = (
             *profile_specs,
-            TemplateSpec("package/pyrightconfig.json.j2", "pyrightconfig.json"),
+            _spec("package/pyrightconfig.json.j2", "pyrightconfig.json"),
         )
     if options.profile == "monorepo" and options.pyright_enabled:
         profile_specs = (
             *profile_specs,
-            TemplateSpec("monorepo/pyrightconfig.json.j2", "pyrightconfig.json"),
+            _spec("monorepo/pyrightconfig.json.j2", "pyrightconfig.json"),
         )
     return (*profile_specs, *adapter_specs)
 
@@ -371,7 +429,9 @@ def _filtered_profile_template_specs(options: InitOptions) -> tuple[TemplateSpec
 def _adapter_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
     """Return selected adapter templates filtered for generated languages."""
     base_specs = tuple(
-        spec for adapter in adapters_for(options.agent) for spec in adapter.template_specs()
+        spec
+        for adapter in adapters_for_selection(options.adapter_selection)
+        for spec in adapter.template_specs()
     )
     filtered_specs = tuple(
         spec
@@ -384,13 +444,13 @@ def _adapter_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
         }
     )
     ts_specs: list[TemplateSpec] = []
-    if options.typescript_enabled and options.agent in {"claude", "all"}:
+    if options.typescript_enabled and "claude" in options.adapter_selection:
         ts_specs.append(
-            TemplateSpec("agents/claude/rules/typescript.md.j2", ".claude/rules/typescript.md")
+            _spec("agents/claude/rules/typescript.md.j2", ".claude/rules/typescript.md")
         )
-    if options.typescript_enabled and options.agent in {"cursor", "all"}:
+    if options.typescript_enabled and "cursor" in options.adapter_selection:
         ts_specs.append(
-            TemplateSpec("agents/cursor/rules/typescript.mdc.j2", ".cursor/rules/typescript.mdc")
+            _spec("agents/cursor/rules/typescript.mdc.j2", ".cursor/rules/typescript.mdc")
         )
     return (*filtered_specs, *ts_specs)
 
@@ -440,6 +500,8 @@ def render_package_files(
             active_renderer,
             template_name=spec.template_name,
             destination=spec.destination.format(package_name=options.package_name),
+            template_id=spec.template_id,
+            lifecycle=spec.lifecycle,
             context=context,
         )
         for spec in package_template_specs(options)
@@ -457,9 +519,16 @@ def scaffold_package_project(
         raise NotADirectoryError(msg)
 
     rendered_files = render_package_files(options, renderer=renderer)
+    manifest = build_project_manifest(options, rendered_files)
+    manifest_file = RenderedFile(
+        path=Path(MANIFEST_RELATIVE_PATH),
+        content=manifest_json(manifest),
+        template_id="scaffold-guard/manifest",
+        lifecycle="managed",
+    )
     planned_files = write_rendered_files(
         options.target_dir,
-        rendered_files,
+        (*rendered_files, manifest_file),
         dry_run=options.dry_run,
         force=options.force,
     )
@@ -467,6 +536,31 @@ def scaffold_package_project(
         target_dir=options.target_dir,
         files=planned_files,
         dry_run=options.dry_run,
+    )
+
+
+def build_project_manifest(
+    options: InitOptions,
+    rendered_files: Iterable[RenderedFile],
+) -> ProjectManifest:
+    """Build lifecycle metadata for a rendered generated project."""
+    manifest_files = tuple(
+        ManifestFile(
+            path=file.path.as_posix(),
+            template_id=file.template_id,
+            sha256=content_sha256(file.content),
+        )
+        for file in sorted(rendered_files, key=lambda rendered_file: rendered_file.path.as_posix())
+        if file.lifecycle == "managed"
+    )
+    return ProjectManifest(
+        manifest_version=MANIFEST_VERSION,
+        project_format_version=PROJECT_FORMAT_VERSION,
+        generated_with=__version__,
+        requires_scaffold_guard=f">={GENERATED_PROJECT_MINIMUM_VERSION}",
+        profile=normalize_profile_choice(options.profile),
+        adapters=options.adapter_selection,
+        files=manifest_files,
     )
 
 
@@ -489,6 +583,9 @@ def write_rendered_files(
     for rendered_file in file_list:
         relative_path = ensure_relative_safe_path(rendered_file.path.as_posix())
         output_path = base / relative_path
+        if has_symlink_component(base, relative_path):
+            msg = f"Refusing to write through symbolic link: {rendered_file.path}"
+            raise FileExistsError(msg)
         if not is_within_directory(base, output_path):
             msg = f"Refusing to write outside target directory: {rendered_file.path}"
             raise ValueError(msg)
@@ -498,7 +595,9 @@ def write_rendered_files(
         return tuple(planned_paths)
 
     if not force:
-        existing_destinations = tuple(path for path in planned_paths if (base / path).exists())
+        existing_destinations = tuple(
+            path for path in planned_paths if (base / path).exists() or (base / path).is_symlink()
+        )
         if existing_destinations:
             formatted_paths = ", ".join(
                 path.as_posix() for path in existing_destinations[:CONFLICT_DISPLAY_LIMIT]

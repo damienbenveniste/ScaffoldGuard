@@ -1,0 +1,45 @@
+stages:
+  - test
+
+python:
+  stage: test
+  image: python:${PYTHON_VERSION}-slim
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.13", "3.14"]
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install uv
+    - uv sync --all-groups --python "${PYTHON_VERSION}"
+  script:
+    - uv run scaffold-guard check
+{% if use_ruff %}
+    - uv run ruff format --check packages/python
+    - uv run ruff check packages/python
+{% endif %}
+{% if use_mypy %}
+    - uv run mypy packages/python/src packages/python/tests packages/python/examples
+{% endif %}
+{% if use_pyright %}
+    - uv run pyright
+{% endif %}
+    - uv run pytest packages/python/tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}
+
+typescript:
+  stage: test
+  image: node:22
+  before_script:
+    - npm install
+  script:
+{% if use_biome %}
+    - npm run ts:format:check
+    - npm run ts:lint
+{% endif %}
+    - npm run ts:typecheck
+{% if use_vitest %}
+    - npm run ts:test
+{% endif %}
+    - npm run ts:build
+{% if use_vitest %}
+    - npm run ts:coverage
+{% endif %}

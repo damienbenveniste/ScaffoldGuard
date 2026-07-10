@@ -5,15 +5,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
+
+from scaffold_guard import __version__
 from scaffold_guard.checks.config import (
-    bool_value,
     int_value,
-    load_scaffold_guard_toml,
+    load_toml,
     str_value,
     table_value,
 )
 from scaffold_guard.models import (
     SUPPORTED_PROFILES,
+    AdapterSelection,
     AgentChoice,
     CiChoice,
     InitOptions,
@@ -24,6 +28,7 @@ from scaffold_guard.models import (
     profile_includes_python,
     profile_includes_typescript,
 )
+from scaffold_guard.versions import PROJECT_FORMAT_VERSION, PROJECT_METADATA_KEYS
 
 SUPPORTED_CI: tuple[CiChoice, ...] = ("github", "gitlab")
 
@@ -58,6 +63,9 @@ class GeneratedProjectConfig:
     typescript_strict: bool
     biome: bool
     vitest: bool
+    format_version: int | None = None
+    generated_with: str | None = None
+    requires_scaffold_guard: str | None = None
 
     @property
     def python(self) -> bool:
@@ -79,6 +87,18 @@ class GeneratedProjectConfig:
         if self.cursor:
             return "cursor"
         return "codex"
+
+    @property
+    def adapters(self) -> tuple[AdapterSelection, ...]:
+        """Return the exact configured adapter selection."""
+        selected: list[AdapterSelection] = []
+        if self.codex:
+            selected.append("codex")
+        if self.claude:
+            selected.append("claude")
+        if self.cursor:
+            selected.append("cursor")
+        return tuple(selected)
 
     def to_init_options(self, *, dry_run: bool, force: bool) -> InitOptions:
         """Convert config into scaffold options for rule regeneration."""
@@ -104,6 +124,7 @@ class GeneratedProjectConfig:
             typescript_strict_enabled=self.typescript_strict,
             biome_enabled=self.biome,
             vitest_enabled=self.vitest,
+            adapter_selection=self.adapters,
         )
 
     def to_json(self) -> dict[str, object]:
@@ -126,6 +147,11 @@ class GeneratedProjectConfig:
                 }
             )
         return {
+            "scaffold_guard": {
+                "format_version": self.format_version,
+                "generated_with": self.generated_with,
+                "requires_scaffold_guard": self.requires_scaffold_guard,
+            },
             "name": self.name,
             "package": self.package,
             "profile": self.profile,
@@ -149,16 +175,25 @@ class GeneratedProjectConfig:
 def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     """Load and validate required `scaffold-guard.toml` fields."""
     resolved_root = root.resolve(strict=False)
-    config_path = resolved_root / "scaffold-guard.toml"
+    config_path = _safe_structured_config_path(resolved_root)
     if not config_path.exists():
         msg = f"Generated project config is missing: {config_path}"
         raise ProjectConfigError(msg)
 
-    config = load_scaffold_guard_toml(resolved_root)
+    config = load_toml(config_path)
     project = table_value(config, "project")
     agents = table_value(config, "agents")
     features = table_value(config, "features")
     tools = table_value(config, "tools")
+    scaffold_guard_present = "scaffold_guard" in config
+    raw_scaffold_guard = config.get("scaffold_guard")
+    if scaffold_guard_present and not isinstance(raw_scaffold_guard, Mapping):
+        raise ProjectConfigError("[scaffold_guard] must be a table.")
+    scaffold_guard: Mapping[str, object]
+    if scaffold_guard_present:
+        scaffold_guard = cast("Mapping[str, object]", raw_scaffold_guard)
+    else:
+        scaffold_guard = {}
 
     name = _required_str(project, "name")
     package = _required_str(project, "package")
@@ -167,14 +202,14 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     typescript_tool_default = profile_includes_typescript(profile)
     ruff_mode = _optional_quality_mode(tools, "ruff_mode")
     if ruff_mode is None:
-        ruff = bool_value(tools, "ruff", default=python_tool_default)
+        ruff = _optional_bool(tools, "ruff", default=python_tool_default)
         ruff_mode = "strict" if ruff else "off"
     else:
         ruff = ruff_mode != "off"
     python_typecheck_mode = _optional_quality_mode(tools, "python_typecheck")
     if python_typecheck_mode is None:
-        mypy = bool_value(tools, "mypy", default=python_tool_default)
-        pyright = bool_value(tools, "pyright", default=python_tool_default)
+        mypy = _optional_bool(tools, "mypy", default=python_tool_default)
+        pyright = _optional_bool(tools, "pyright", default=python_tool_default)
         python_typecheck_mode = "strict" if (mypy or pyright) else "off"
         python_typechecker = _typechecker_from_booleans(mypy=mypy, pyright=pyright)
     else:
@@ -183,6 +218,10 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     ci = _optional_ci(project, features)
     python_min = _required_str(project, "python_min")
     coverage = _required_int(project, "coverage_fail_under")
+    format_version, generated_with, requires_scaffold_guard = _project_format_metadata(
+        scaffold_guard,
+        present=scaffold_guard_present,
+    )
     return GeneratedProjectConfig(
         root=resolved_root,
         name=name,
@@ -191,26 +230,95 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
         python_min=python_min,
         coverage_fail_under=coverage,
         ci=ci,
-        codex=bool_value(agents, "codex", default=True),
-        claude=bool_value(agents, "claude", default=False),
-        cursor=bool_value(agents, "cursor", default=False),
-        docs=bool_value(features, "docs", default=True),
-        github_actions=bool_value(features, "github_actions", default=ci == "github"),
-        gitlab_ci=bool_value(features, "gitlab_ci", default=ci == "gitlab"),
+        codex=_optional_bool(agents, "codex", default=True),
+        claude=_optional_bool(agents, "claude", default=False),
+        cursor=_optional_bool(agents, "cursor", default=False),
+        docs=_optional_bool(features, "docs", default=True),
+        github_actions=_optional_bool(features, "github_actions", default=ci == "github"),
+        gitlab_ci=_optional_bool(features, "gitlab_ci", default=ci == "gitlab"),
         ruff=ruff,
         mypy=mypy,
         pyright=pyright,
         ruff_mode=ruff_mode,
         python_typecheck_mode=python_typecheck_mode,
         python_typechecker=python_typechecker,
-        typescript_strict=bool_value(
+        typescript_strict=_optional_bool(
             tools,
             "typescript_strict",
             default=typescript_tool_default,
         ),
-        biome=bool_value(tools, "biome", default=typescript_tool_default),
-        vitest=bool_value(tools, "vitest", default=typescript_tool_default),
+        biome=_optional_bool(tools, "biome", default=typescript_tool_default),
+        vitest=_optional_bool(tools, "vitest", default=typescript_tool_default),
+        format_version=format_version,
+        generated_with=generated_with,
+        requires_scaffold_guard=requires_scaffold_guard,
     )
+
+
+def _project_format_metadata(
+    table: Mapping[str, object],
+    *,
+    present: bool,
+) -> tuple[int | None, str | None, str | None]:
+    """Parse and validate optional versioned generated-project metadata."""
+    if not present:
+        return None, None, None
+    if not table:
+        raise ProjectConfigError("[scaffold_guard] must not be empty.")
+    unknown_keys = set(table) - PROJECT_METADATA_KEYS
+    if unknown_keys:
+        unknown_key = sorted(unknown_keys)[0]
+        raise ProjectConfigError(f"[scaffold_guard] contains unsupported key: {unknown_key}")
+    format_version = int_value(table, "format_version")
+    generated_with = str_value(table, "generated_with")
+    requires_scaffold_guard = str_value(table, "requires_scaffold_guard")
+    if format_version is None or generated_with is None or requires_scaffold_guard is None:
+        raise ProjectConfigError(
+            "[scaffold_guard] requires format_version, generated_with, and requires_scaffold_guard."
+        )
+    if format_version != PROJECT_FORMAT_VERSION:
+        raise ProjectConfigError(f"Unsupported generated project format: {format_version}")
+    try:
+        Version(generated_with)
+    except InvalidVersion as exc:
+        msg = f"Invalid generated_with version: {generated_with}"
+        raise ProjectConfigError(msg) from exc
+    try:
+        requirement = SpecifierSet(requires_scaffold_guard)
+    except InvalidSpecifier as exc:
+        msg = f"Invalid requires_scaffold_guard specifier: {requires_scaffold_guard}"
+        raise ProjectConfigError(msg) from exc
+    if Version(__version__) not in requirement:
+        msg = (
+            f"ScaffoldGuard {__version__} does not satisfy generated project requirement "
+            f"{requires_scaffold_guard}. Use the project-pinned ScaffoldGuard version."
+        )
+        raise ProjectConfigError(msg)
+    return format_version, generated_with, requires_scaffold_guard
+
+
+def _safe_structured_config_path(root: Path) -> Path:
+    """Return the config path after rejecting symlinks below the resolved root."""
+    resolved_root = root.resolve(strict=False)
+    path = resolved_root / "scaffold-guard.toml"
+    symlink = _first_symlink_component(resolved_root, path)
+    if symlink is not None:
+        msg = (
+            "Refusing to read scaffold-guard.toml because symbolic links are not allowed "
+            f"below the project root: {symlink}"
+        )
+        raise ProjectConfigError(msg)
+    return path
+
+
+def _first_symlink_component(root: Path, path: Path) -> Path | None:
+    """Return the first symlink component from `root` down to `path`, excluding root."""
+    current = root
+    for part in path.relative_to(root).parts:
+        current /= part
+        if current.is_symlink():
+            return current
+    return None
 
 
 def _required_str(table: Mapping[str, object], key: str) -> str:
@@ -239,25 +347,42 @@ def _optional_ci(project: Mapping[str, object], features: Mapping[str, object]) 
     if value is not None:
         msg = f"Unsupported generated project CI provider: {value}"
         raise ProjectConfigError(msg)
-    if bool_value(features, "gitlab_ci", default=False):
+    if _optional_bool(features, "gitlab_ci", default=False):
         return "gitlab"
     return "github"
 
 
 def _optional_quality_mode(table: Mapping[str, object], key: str) -> PythonQualityMode | None:
     """Return an optional Python quality strictness mode."""
+    if key not in table:
+        return None
     value = str_value(table, key)
     if value in {"strict", "standard", "off"}:
         return cast("PythonQualityMode", value)
-    return None
+    msg = f"Unsupported generated project quality mode for {key}: {table[key]}"
+    raise ProjectConfigError(msg)
 
 
 def _optional_typechecker(table: Mapping[str, object], key: str) -> PythonTypechecker | None:
     """Return an optional Python type checker selection."""
+    if key not in table:
+        return None
     value = str_value(table, key)
     if value in {"mypy+pyright", "mypy", "pyright"}:
         return cast("PythonTypechecker", value)
-    return None
+    msg = f"Unsupported generated project typechecker for {key}: {table[key]}"
+    raise ProjectConfigError(msg)
+
+
+def _optional_bool(table: Mapping[str, object], key: str, *, default: bool) -> bool:
+    """Return an optional bool while rejecting malformed present values."""
+    if key not in table:
+        return default
+    value = table[key]
+    if isinstance(value, bool):
+        return value
+    msg = f"Generated project config value must be a boolean: {key}"
+    raise ProjectConfigError(msg)
 
 
 def _typechecker_enabled(
@@ -282,7 +407,7 @@ def _typechecker_from_booleans(*, mypy: bool, pyright: bool) -> PythonTypechecke
 def _required_int(table: Mapping[str, object], key: str) -> int:
     """Return a required integer field from a TOML table."""
     value = int_value(table, key)
-    if value is None:
+    if value is None or isinstance(value, bool):
         msg = f"Missing required integer config value: {key}"
         raise ProjectConfigError(msg)
     return value

@@ -18,8 +18,9 @@ Python, TypeScript, or mixed Python+TypeScript starter layouts.
 - `.cursor/rules/*.mdc` when Cursor is selected.
 - `scaffold-guard check` for fast local policy checks.
 - `scaffold-guard inspect-diff` for diff-specific validation guidance.
-- `scaffold-guard validate`, `publish`, `compile-rules`, `doctor`, and
-  `version`.
+- `scaffold-guard upgrade` for a read-only preview and an explicit, reviewed
+  `--apply` path.
+- `scaffold-guard validate`, `publish`, `compile-rules`, `doctor`, and `version`.
 
 See the [command reference](commands.md) for when to use each command, available
 options, and exit-code behavior.

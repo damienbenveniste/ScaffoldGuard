@@ -50,6 +50,9 @@ jobs:
       - name: Build distributions
         run: uv build
 
+      - name: Inspect wheel contents
+        run: python scripts/inspect-wheel.py dist/scaffold_guard-*.whl
+
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:

@@ -145,8 +145,9 @@ configuration change in this repository.
   compatibility reason.
 - Generated projects should target Python `>=3.13` unless the implementation
   plan changes.
-- Keep CLI runtime dependencies minimal. V1 should use `typer`, `rich`,
-  `jinja2`, and `packaging` only when they are genuinely needed.
+- Keep CLI runtime dependencies minimal. Use `typer`, `rich`, `jinja2`, and
+  `packaging` only when they are genuinely needed; `tomlkit` is reserved for
+  comment-preserving structured migrations of generated-project TOML.
 - Prefer Hatchling for package builds and make sure generated templates are
   included in wheels.
 - Use `importlib.resources.files()` to load packaged templates.
@@ -210,8 +211,19 @@ configuration change in this repository.
   `alwaysApply`, and `globs` where appropriate.
 - Generated agent instruction files should be concise, serious, and enforceable
   through `scaffold-guard check` and CI where possible.
-- Use generated markers and checksums or clearly documented overwrite rules for
-  files managed by `compile-rules`.
+- Give every generated template a stable identifier and an explicit lifecycle:
+  managed files may be reconciled only from recorded hashes, structured files
+  may be changed only by field-level migrations, and seed files become
+  user-owned immediately after generation.
+- Keep generated-project format metadata and the managed-file manifest
+  deterministic, versioned, path-safe, and free of timestamps. Hash exact file
+  bytes and never treat a generated marker as proof that content is unchanged.
+- Keep upgrades preview-first. Applying an upgrade requires explicit intent,
+  refuses unresolved drift or ambiguous legacy content, does not automatically
+  delete orphaned files, and rolls back incomplete writes.
+- Route `compile-rules` through the same managed-file integrity rules as project
+  upgrades. Broad `--force` behavior remains an explicit reviewed escape hatch,
+  not the default reconciliation path.
 - Keep template rendering deterministic. Tests should not depend on wall-clock
   time, network access, local credentials, or machine-specific paths.
 

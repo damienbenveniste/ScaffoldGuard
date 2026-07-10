@@ -24,6 +24,10 @@ evidence, and warn when edits are observed without subagent start evidence.
 Its generated git rules allow repo-local `uv run scaffold-guard publish` as the
 audited approval-free publishing path and protect raw `git commit` and
 `git push`.
+They also allow the repo-local `uv run scaffold-guard upgrade` command prefix
+for both preview and the audited `--apply` path. This technical permission does
+not authorize a write: behavioral guidance still requires explicit user intent
+and review of the preview before `--apply`.
 
 ## Claude Code
 
@@ -40,6 +44,9 @@ included for `python` and `monorepo`, and TypeScript rules are included for
 
 Claude git hygiene guidance points to the same repo-local
 `uv run scaffold-guard publish` path for intentional commits and pushes.
+Generated operating guidance uses repo-local `uv run scaffold-guard upgrade`
+when the project's pinned version matters. It requires explicit user intent and
+review of the preview before `--apply`.
 
 ## Cursor
 
@@ -52,6 +59,9 @@ Claude rules.
 
 Cursor git hygiene guidance points to the same repo-local
 `uv run scaffold-guard publish` path for intentional commits and pushes.
+Generated operating guidance uses repo-local `uv run scaffold-guard upgrade`
+when the project's pinned version matters, with explicit user intent and preview
+review required before `--apply`.
 
 ## Why Checks Still Matter
 
