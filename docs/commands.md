@@ -180,8 +180,11 @@ scaffold-guard compile-rules [--path .] [--agent codex|claude|cursor|all] [--dry
 Use `compile-rules` after changing adapter selection or when you want to refresh
 managed instruction files. Start with `--dry-run` to see the planned files.
 
-By default, `compile-rules` refuses to overwrite manually edited files. Use
-`--force` only when you intentionally want to replace managed generated files.
+By default, `compile-rules` regenerates an existing managed file only when its
+current content exactly matches the content ScaffoldGuard would render. The
+generated marker identifies managed files, but the marker alone is not proof
+that default regeneration can replace the file. Use `--force` only after review
+when you intentionally want to replace managed generated files.
 
 ## `doctor`
 

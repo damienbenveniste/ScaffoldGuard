@@ -114,5 +114,8 @@ scaffold-guard compile-rules --dry-run
 scaffold-guard compile-rules --force
 ```
 
-`compile-rules` refuses to overwrite manually edited instruction files unless
-`--force` is supplied or the file has the generated marker.
+`compile-rules` default regeneration only proceeds when each existing managed
+instruction file exactly matches the content ScaffoldGuard would render. A
+generated marker alone is not proof that the file can be replaced. Use
+`--force` only after review when you intentionally want to replace managed
+generated files.

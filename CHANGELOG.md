@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5 - 2026-07-09
+
+- Fixed `compile-rules` so generated markers alone no longer authorize an
+  overwrite; differing managed content now requires explicit `--force`.
+
 ## 0.1.4 - 2026-07-08
 
 - Fixed generated Codex publish policy templates to allow the audited

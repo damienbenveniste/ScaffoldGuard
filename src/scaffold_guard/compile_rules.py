@@ -127,14 +127,14 @@ def _refuse_manual_files(
     config: GeneratedProjectConfig,
     rendered_files: tuple[RenderedFile, ...],
 ) -> None:
-    """Refuse to overwrite existing rule files that lack the generated marker."""
+    """Refuse to overwrite existing rule files whose content changed."""
     for file in rendered_files:
         target = config.root / file.path
         if not target.exists():
             continue
-        content = target.read_text(encoding="utf-8", errors="replace")
-        if not _has_generated_marker(file.path, content):
-            msg = f"Refusing to overwrite manually edited file without --force: {file.path}"
+        content = target.read_bytes()
+        if content != file.content.encode("utf-8"):
+            msg = f"Refusing to overwrite changed generated file without --force: {file.path}"
             raise FileExistsError(msg)
 
 

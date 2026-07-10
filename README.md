@@ -223,6 +223,12 @@ scaffold-guard doctor [--path .] [--json]
 scaffold-guard version
 ```
 
+`compile-rules` default regeneration only replaces existing managed files when
+their current content exactly matches the content ScaffoldGuard would render.
+Generated markers identify managed files, but markers alone are not proof that a
+file can be replaced. Use `--force` only after review when replacement is
+intentional.
+
 Use repo-local `uv run scaffold-guard publish --message "Update project" --all`
 only after an explicit user request to publish from a generated project. The
 repo-local invocation resolves the generated project's pinned ScaffoldGuard

@@ -86,6 +86,95 @@ def test_compile_rules_refuses_manual_files_without_force(
     assert GENERATED_MARKER in agents_path.read_text(encoding="utf-8")
 
 
+def test_compile_rules_refuses_marker_preserving_markdown_edits_without_force(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """A retained generated Markdown marker is not enough to allow overwrite."""
+    project_dir = generated_project(tmp_path)
+    agents_path = project_dir / "AGENTS.md"
+    agents_path.write_text(
+        agents_path.read_text(encoding="utf-8").replace(
+            "## Project Orientation",
+            "## Local Project Orientation",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FileExistsError, match=r"AGENTS\.md"):
+        compile_rules(project_dir, agent="codex", dry_run=False, force=False)
+
+
+def test_compile_rules_refuses_invalid_bytes_with_generated_marker_without_force(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Generated marker bytes do not allow non-UTF-8 content drift."""
+    project_dir = generated_project(tmp_path)
+    agents_path = project_dir / "AGENTS.md"
+    agents_path.write_bytes(agents_path.read_bytes() + b"\xff")
+
+    with pytest.raises(FileExistsError, match=r"AGENTS\.md"):
+        compile_rules(project_dir, agent="codex", dry_run=False, force=False)
+
+
+def test_compile_rules_refuses_json_hooks_edits_with_generated_status_without_force(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """A retained generated JSON status phrase is not enough to allow overwrite."""
+    project_dir = generated_project(tmp_path)
+    hooks_path = project_dir / ".codex/hooks.json"
+    hooks_path.write_text(
+        hooks_path.read_text(encoding="utf-8").replace(
+            "scaffold-guard generated: checking project policy after file edits",
+            "scaffold-guard generated: checking project policy after local edits",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FileExistsError, match=r"\.codex/hooks\.json"):
+        compile_rules(project_dir, agent="codex", dry_run=False, force=False)
+
+
+def test_compile_rules_allows_exact_existing_content_without_force(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Exactly rendered files remain idempotent without requiring --force."""
+    project_dir = generated_project(tmp_path)
+    selected_files = selected_agent_files(load_generated_project_config(project_dir))
+    initial_contents = {
+        path: (project_dir / path).read_text(encoding="utf-8") for path in selected_files
+    }
+
+    summary = compile_rules(project_dir, agent="all", dry_run=False, force=False)
+
+    assert summary.files == selected_files
+    assert {
+        path: (project_dir / path).read_text(encoding="utf-8") for path in selected_files
+    } == initial_contents
+
+
+def test_compile_rules_force_replaces_changed_generated_content(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """--force preserves the explicit replacement path for changed generated files."""
+    project_dir = generated_project(tmp_path)
+    agents_path = project_dir / "AGENTS.md"
+    expected_content = agents_path.read_text(encoding="utf-8")
+    agents_path.write_text(
+        expected_content.replace("## Project Orientation", "## Local Project Orientation"),
+        encoding="utf-8",
+    )
+
+    summary = compile_rules(project_dir, agent="codex", dry_run=False, force=True)
+
+    assert Path("AGENTS.md") in summary.files
+    assert agents_path.read_text(encoding="utf-8") == expected_content
+
+
 def test_compile_rules_can_plan_missing_selected_adapter_files(
     tmp_path: Path,
     generated_project: Callable[..., Path],
