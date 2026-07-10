@@ -7,7 +7,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from scaffold_guard.checks.config import load_toml, project_profile
-from scaffold_guard.project_config import ProjectConfigError, load_generated_project_config
+from scaffold_guard.checks.project_health import desired_managed_paths
+from scaffold_guard.fs import has_symlink_component
+from scaffold_guard.manifest import (
+    MANIFEST_RELATIVE_PATH,
+    ProjectManifest,
+    bytes_sha256,
+    load_manifest,
+)
+from scaffold_guard.project_config import (
+    GeneratedProjectConfig,
+    ProjectConfigError,
+    load_generated_project_config,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +182,7 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
             severity="info",
             message="scaffold-guard.toml parses.",
         ),
+        *_manifest_checks(root, config),
         DoctorCheck(
             id="agents-md",
             ok=(root / "AGENTS.md").exists(),
@@ -265,6 +278,146 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
                 ok=(root / ".gitlab-ci.yml").exists(),
                 severity="error",
                 message="GitLab CI configured.",
+            )
+        )
+    return tuple(checks)
+
+
+def _manifest_checks(root: Path, config: GeneratedProjectConfig) -> tuple[DoctorCheck, ...]:
+    """Report generated manifest integrity and deselected orphan records."""
+    manifest_path = root / MANIFEST_RELATIVE_PATH
+    if config.format_version is None:
+        return (_legacy_manifest_check(manifest_path),)
+    if not manifest_path.exists():
+        return (
+            DoctorCheck(
+                id="managed-file-manifest",
+                ok=False,
+                severity="error",
+                message="v0.2 generated project metadata requires a managed-file manifest.",
+            ),
+        )
+    try:
+        manifest = load_manifest(manifest_path)
+    except (OSError, TypeError, ValueError) as exc:
+        return (
+            DoctorCheck(
+                id="managed-file-manifest",
+                ok=False,
+                severity="error",
+                message=f"Managed-file manifest is invalid: {exc}",
+            ),
+        )
+    if (
+        manifest.generated_with != config.generated_with
+        or manifest.requires_scaffold_guard != config.requires_scaffold_guard
+        or manifest.project_format_version != config.format_version
+        or manifest.profile != config.profile
+        or manifest.adapters != config.adapters
+    ):
+        return (
+            DoctorCheck(
+                id="managed-file-manifest",
+                ok=False,
+                severity="error",
+                message="Managed-file manifest metadata does not match config.",
+            ),
+        )
+    desired_paths = desired_managed_paths(config)
+    drift = _manifest_drift(root, manifest, desired_paths)
+    if drift is not None:
+        return (drift, *_manifest_orphan_checks(root, manifest, desired_paths))
+    return (
+        DoctorCheck(
+            id="managed-file-manifest",
+            ok=True,
+            severity="info",
+            message="Managed-file manifest is current.",
+        ),
+        *_manifest_orphan_checks(root, manifest, desired_paths),
+    )
+
+
+def _legacy_manifest_check(manifest_path: Path) -> DoctorCheck:
+    """Report legacy manifest status."""
+    if manifest_path.exists():
+        return DoctorCheck(
+            id="managed-file-manifest",
+            ok=True,
+            severity="info",
+            message="Managed-file manifest is present.",
+        )
+    return DoctorCheck(
+        id="managed-file-manifest",
+        ok=False,
+        severity="warning",
+        message="Legacy generated project has no managed-file manifest; run upgrade.",
+    )
+
+
+def _manifest_drift(
+    root: Path,
+    manifest: ProjectManifest,
+    desired_paths: frozenset[str],
+) -> DoctorCheck | None:
+    """Return a manifest drift diagnostic when one exists."""
+    manifest_paths = {file.path for file in manifest.files}
+    missing_records = sorted(desired_paths - manifest_paths)
+    if missing_records:
+        return DoctorCheck(
+            id="managed-file-manifest",
+            ok=False,
+            severity="error",
+            message=f"Selected managed file is missing from manifest: {missing_records[0]}",
+        )
+    for file in manifest.files:
+        if file.lifecycle != "managed" or file.path not in desired_paths:
+            continue
+        relative_path = Path(file.path)
+        path = root / relative_path
+        if has_symlink_component(root, relative_path):
+            return DoctorCheck(
+                id="managed-file-manifest",
+                ok=False,
+                severity="error",
+                message=f"Manifest file path contains a symbolic-link component: {file.path}",
+            )
+        if not path.is_file() or path.is_symlink():
+            return DoctorCheck(
+                id="managed-file-manifest",
+                ok=False,
+                severity="error",
+                message=f"Manifest file is missing or invalid: {file.path}",
+            )
+        current_hash = bytes_sha256(path.read_bytes())
+        if current_hash != file.sha256:
+            return DoctorCheck(
+                id="managed-file-manifest",
+                ok=False,
+                severity="error",
+                message=f"Manifest file drift detected: {file.path}",
+            )
+    return None
+
+
+def _manifest_orphan_checks(
+    root: Path,
+    manifest: ProjectManifest,
+    desired_paths: frozenset[str],
+) -> tuple[DoctorCheck, ...]:
+    """Return warning diagnostics for deselected manifest records."""
+    checks: list[DoctorCheck] = []
+    for file in manifest.files:
+        if file.lifecycle != "managed" or file.path in desired_paths:
+            continue
+        path = root / file.path
+        state = "remains in place" if path.exists() or path.is_symlink() else "is already absent"
+        checks.append(
+            DoctorCheck(
+                id="managed-file-orphan",
+                ok=False,
+                severity="warning",
+                message=f"Deselected managed file {file.path} {state}.",
             )
         )
     return tuple(checks)

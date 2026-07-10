@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -11,6 +12,7 @@ from typer.testing import CliRunner
 from scaffold_guard import doctor
 from scaffold_guard.cli import app
 from scaffold_guard.doctor import run_doctor
+from scaffold_guard.manifest import MANIFEST_RELATIVE_PATH, load_manifest, write_manifest
 
 SUCCESS = 0
 COMMAND_FAILED = 1
@@ -214,6 +216,242 @@ def test_doctor_omits_disabled_adapter_and_ci_checks(
     assert "gitlab-ci" not in check_ids
 
 
+def test_doctor_warns_for_present_deselected_manifest_record(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    replace_text: Callable[[Path, str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor reports a present deselected managed file as a non-failing orphan."""
+    project_dir = generated_project(tmp_path, agent="codex")
+    replace_text(
+        project_dir / "scaffold-guard.toml",
+        "github_actions = true",
+        "github_actions = false",
+    )
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    orphan_checks = [check for check in report.checks if check.id == "managed-file-orphan"]
+
+    assert report.ok
+    assert orphan_checks
+    assert all(check.severity == "warning" for check in orphan_checks)
+    assert any("remains in place" in check.message for check in orphan_checks)
+
+
+def test_doctor_warns_for_missing_deselected_manifest_record(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    replace_text: Callable[[Path, str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor reports an absent deselected managed file as a non-failing orphan."""
+    project_dir = generated_project(tmp_path, agent="codex")
+    replace_text(
+        project_dir / "scaffold-guard.toml",
+        "github_actions = true",
+        "github_actions = false",
+    )
+    for path in sorted((project_dir / ".github").rglob("*"), reverse=True):
+        path.unlink() if path.is_file() else path.rmdir()
+    (project_dir / ".github").rmdir()
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    orphan_checks = [check for check in report.checks if check.id == "managed-file-orphan"]
+
+    assert report.ok
+    assert orphan_checks
+    assert all(check.severity == "warning" for check in orphan_checks)
+    assert any("is already absent" in check.message for check in orphan_checks)
+
+
+def test_doctor_errors_for_missing_v02_manifest(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor fails a versioned project whose managed-file manifest is absent."""
+    project_dir = generated_project(tmp_path)
+    (project_dir / MANIFEST_RELATIVE_PATH).unlink()
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert not report.ok
+    assert not check.ok
+    assert "requires a managed-file manifest" in check.message
+
+
+def test_doctor_errors_for_malformed_manifest(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor reports malformed manifest JSON without crashing."""
+    project_dir = generated_project(tmp_path)
+    (project_dir / MANIFEST_RELATIVE_PATH).write_text("{not-json", encoding="utf-8")
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert not report.ok
+    assert "manifest is invalid" in check.message.lower()
+
+
+def test_doctor_errors_for_manifest_metadata_mismatch(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    replace_text: Callable[[Path, str, str], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor retains strict manifest/config metadata agreement."""
+    project_dir = generated_project(tmp_path)
+    replace_text(project_dir / "scaffold-guard.toml", "claude = true", "claude = false")
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert not report.ok
+    assert "metadata does not match" in check.message
+
+
+@pytest.mark.parametrize("mutation", ["missing", "drift"])
+def test_doctor_errors_for_selected_managed_file_integrity(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    """Selected managed files remain error-level when missing or drifted."""
+    project_dir = generated_project(tmp_path)
+    target = project_dir / ".claude/rules/testing.md"
+    if mutation == "missing":
+        target.unlink()
+    else:
+        target.write_bytes(target.read_bytes() + b"# local edit\n")
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert not report.ok
+    assert "Manifest file" in check.message
+
+
+def test_doctor_errors_for_symlinked_managed_parent(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor rejects selected managed files beneath a symlinked parent directory."""
+    project_dir = generated_project(tmp_path)
+    codex_dir = project_dir / ".codex"
+    internal_codex = project_dir / "local-codex"
+    codex_dir.rename(internal_codex)
+    codex_dir.symlink_to(internal_codex, target_is_directory=True)
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert not report.ok
+    assert not check.ok
+    assert "symbolic-link component" in check.message
+
+
+def test_doctor_errors_for_selected_manifest_record_omission(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor errors when a selected managed path has no manifest record."""
+    project_dir = generated_project(tmp_path)
+    manifest_path = project_dir / MANIFEST_RELATIVE_PATH
+    manifest = load_manifest(manifest_path)
+    write_manifest(
+        manifest_path,
+        replace(
+            manifest,
+            files=tuple(file for file in manifest.files if file.path != ".claude/rules/testing.md"),
+        ),
+    )
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert not report.ok
+    assert "missing from manifest" in check.message
+
+
+def test_doctor_warns_for_manifestless_legacy_project(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy projects receive upgrade guidance without an error-level manifest check."""
+    project_dir = generated_project(tmp_path)
+    config_path = project_dir / "scaffold-guard.toml"
+    lines = config_path.read_text(encoding="utf-8").splitlines()
+    start = lines.index("[scaffold_guard]")
+    end = lines.index("[agents]")
+    config_path.write_text("\n".join((*lines[:start], *lines[end:])) + "\n", encoding="utf-8")
+    (project_dir / MANIFEST_RELATIVE_PATH).unlink()
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert report.ok
+    assert not check.ok
+    assert check.severity == "warning"
+    assert "run upgrade" in check.message
+
+
+def test_doctor_allows_legacy_metadata_with_existing_manifest(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy metadata treats an already-present manifest as informational."""
+    project_dir = generated_project(tmp_path)
+    config_path = project_dir / "scaffold-guard.toml"
+    lines = config_path.read_text(encoding="utf-8").splitlines()
+    start = lines.index("[scaffold_guard]")
+    end = lines.index("[agents]")
+    config_path.write_text("\n".join((*lines[:start], *lines[end:])) + "\n", encoding="utf-8")
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    check = _managed_manifest_check(report)
+
+    assert report.ok
+    assert check.ok
+    assert check.severity == "info"
+
+
+def test_doctor_minimal_profile_allows_missing_pyproject(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Minimal doctor diagnostics retain their optional-pyproject environment check."""
+    project_dir = generated_project(tmp_path, profile="minimal")
+    (project_dir / "pyproject.toml").unlink()
+    _stub_doctor_environment(monkeypatch, project_dir)
+
+    report = run_doctor(project_dir)
+    checks = {check.id: check for check in report.checks}
+
+    assert checks["pyproject"].ok
+    assert "not required" in checks["pyproject"].message
+
+
 def test_doctor_reports_gitlab_ci(
     tmp_path: Path,
     generated_project: Callable[..., Path],
@@ -347,3 +585,23 @@ def test_doctor_reports_monorepo_language_directories(
     assert checks["npm-available"].ok
     assert checks["python-package-directory"].ok
     assert checks["typescript-package-directory"].ok
+
+
+def _stub_doctor_environment(monkeypatch: pytest.MonkeyPatch, project_dir: Path) -> None:
+    """Make executable and git diagnostics deterministic for manifest tests."""
+
+    def fake_which(name: str) -> str:
+        return f"/usr/bin/{name}"
+
+    async def fake_run_git(git_path: str, root: Path) -> bool:
+        assert git_path == "/usr/bin/git"
+        assert root == project_dir
+        return True
+
+    monkeypatch.setattr("scaffold_guard.doctor.shutil.which", fake_which)
+    monkeypatch.setattr(doctor, "_run_git", fake_run_git)
+
+
+def _managed_manifest_check(report: doctor.DoctorReport) -> doctor.DoctorCheck:
+    """Return the primary managed-file manifest diagnostic."""
+    return next(check for check in report.checks if check.id == "managed-file-manifest")

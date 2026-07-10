@@ -9,11 +9,20 @@ from pathlib import Path
 
 import pytest
 
-from scaffold_guard.models import AgentChoice, CiChoice, InitOptions, ProfileChoice
+from scaffold_guard.manifest import load_manifest
+from scaffold_guard.models import (
+    AdapterSelection,
+    AgentChoice,
+    CiChoice,
+    InitOptions,
+    ProfileChoice,
+    TemplateLifecycle,
+)
 from scaffold_guard.renderer import TemplateRenderer
 from scaffold_guard.scaffold import (
     RenderedFile,
     build_init_options,
+    build_project_manifest,
     normalize_project_name,
     package_template_specs,
     render_file,
@@ -22,9 +31,19 @@ from scaffold_guard.scaffold import (
     with_quality_tools,
     write_rendered_files,
 )
-from scaffold_guard.versions import PUBLISH_CAPABLE_MINIMUM_VERSION
+from scaffold_guard.versions import GENERATED_PROJECT_MINIMUM_VERSION
 
 MINIMUM_FORBIDDEN_GIT_RULES = 5
+EXACT_ADAPTER_SELECTIONS: tuple[tuple[AdapterSelection, ...], ...] = (
+    (),
+    ("codex",),
+    ("claude",),
+    ("cursor",),
+    ("codex", "claude"),
+    ("codex", "cursor"),
+    ("claude", "cursor"),
+    ("codex", "claude", "cursor"),
+)
 
 
 def test_render_file_combines_template_and_destination() -> None:
@@ -33,6 +52,8 @@ def test_render_file_combines_template_and_destination() -> None:
         TemplateRenderer(),
         template_name="package/README.md.j2",
         destination="README.md",
+        template_id="package/README.md",
+        lifecycle="seed",
         context={"project_slug": "demo", "package_name": "demo"},
     )
 
@@ -55,6 +76,8 @@ def test_render_file_combines_template_and_destination() -> None:
             "- `examples/` contains runnable examples.\n"
             "- `AGENTS.md` contains shared coding-agent instructions.\n"
         ),
+        template_id="package/README.md",
+        lifecycle="seed",
     )
 
 
@@ -195,6 +218,103 @@ def test_package_template_specs_include_selected_adapters(tmp_path: Path) -> Non
     assert "CLAUDE.md" in all_destinations
     assert ".claude/rules/python.md" in all_destinations
     assert ".cursor/rules/python.mdc" in all_destinations
+
+
+def test_template_specs_carry_stable_ids_and_lifecycle(tmp_path: Path) -> None:
+    """Planned templates include stable manifest identifiers and lifecycle data."""
+    options = _init_options(tmp_path, agent="all")
+
+    specs_by_destination = {spec.destination: spec for spec in package_template_specs(options)}
+
+    assert specs_by_destination["AGENTS.md"].template_id == "package/AGENTS.md"
+    assert specs_by_destination["AGENTS.md"].lifecycle == "managed"
+    assert specs_by_destination[".github/workflows/ci.yml"].lifecycle == "managed"
+    assert specs_by_destination[".codex/config.toml"].lifecycle == "managed"
+    assert specs_by_destination["pyproject.toml"].lifecycle == "structured"
+    assert specs_by_destination["scaffold-guard.toml"].lifecycle == "structured"
+    assert specs_by_destination["pyrightconfig.json"].lifecycle == "structured"
+    assert specs_by_destination[".gitignore"].lifecycle == "seed"
+    assert specs_by_destination["src/{package_name}/core.py"].lifecycle == "seed"
+
+
+@pytest.mark.parametrize(
+    ("selection", "expected", "excluded"),
+    [
+        (
+            ("codex", "claude"),
+            {".codex/config.toml", "CLAUDE.md"},
+            {".cursor/rules/python.mdc"},
+        ),
+        (
+            ("codex", "cursor"),
+            {".codex/config.toml", ".cursor/rules/python.mdc"},
+            {"CLAUDE.md"},
+        ),
+        (
+            ("claude", "cursor"),
+            {"CLAUDE.md", ".cursor/rules/python.mdc"},
+            {".codex/config.toml"},
+        ),
+    ],
+)
+def test_package_template_specs_use_exact_adapter_selection(
+    tmp_path: Path,
+    selection: tuple[AdapterSelection, ...],
+    expected: set[str],
+    excluded: set[str],
+) -> None:
+    """Scaffold planning honors exact adapter combinations beyond CLI shorthand."""
+    options = replace(_init_options(tmp_path, agent="codex"), adapter_selection=selection)
+
+    destinations = {spec.destination for spec in package_template_specs(options)}
+
+    assert expected <= destinations
+    assert destinations.isdisjoint(excluded)
+
+
+def test_package_template_specs_preserve_empty_adapter_selection(tmp_path: Path) -> None:
+    """Config-driven rendering can omit every optional adapter file."""
+    options = replace(_init_options(tmp_path, agent="codex"), adapter_selection=())
+
+    destinations = {spec.destination for spec in package_template_specs(options)}
+    rendered_files = render_package_files(options)
+    manifest = build_project_manifest(options, rendered_files)
+
+    assert "AGENTS.md" in destinations
+    assert ".codex/config.toml" not in destinations
+    assert "CLAUDE.md" not in destinations
+    assert ".cursor/rules/python.mdc" not in destinations
+    assert manifest.adapters == ()
+
+
+def test_lifecycle_catalog_is_complete_for_supported_generation_matrix(tmp_path: Path) -> None:
+    """Every rendered catalog has stable unique identifiers and lifecycle coverage."""
+    for profile in ("minimal", "python", "typescript", "monorepo"):
+        for ci in ("github", "gitlab"):
+            for adapter_selection in EXACT_ADAPTER_SELECTIONS:
+                for ruff, mypy, pyright, typescript_tools in _tool_matrix(profile):
+                    options = _init_options(
+                        tmp_path,
+                        agent="codex",
+                        ci=ci,
+                        profile=profile,
+                        ruff=ruff,
+                        mypy=mypy,
+                        pyright=pyright,
+                        typescript_tools=typescript_tools,
+                    )
+                    options = replace(options, adapter_selection=adapter_selection)
+
+                    specs = package_template_specs(options)
+                    destinations = [spec.destination for spec in specs]
+                    template_ids = [spec.template_id for spec in specs]
+                    lifecycles = {spec.lifecycle for spec in specs}
+
+                    assert all(template_ids)
+                    assert lifecycles <= {"managed", "structured", "seed"}
+                    assert len(destinations) == len(set(destinations))
+                    assert len(template_ids) == len(set(template_ids))
+                    assert {"managed", "structured", "seed"} <= lifecycles
 
 
 def test_typescript_template_specs_filter_python_adapter_rules(tmp_path: Path) -> None:
@@ -365,7 +485,7 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
     assert 'decision = "prompt"' not in git_rules
     assert git_rules.count('decision = "forbidden"') >= MINIMUM_FORBIDDEN_GIT_RULES
     assert 'decision = "allow"' in git_rules
-    assert f'"scaffold-guard>={PUBLISH_CAPABLE_MINIMUM_VERSION}"' in pyproject
+    assert f'"scaffold-guard>={GENERATED_PROJECT_MINIMUM_VERSION}"' in pyproject
     assert 'pattern = ["uv", "run", "ruff", "check", "packages/python"]' in rules
     assert 'pattern = ["npm", "run", "ts:typecheck"]' in rules
 
@@ -540,7 +660,92 @@ def test_scaffold_package_project_dry_run_does_not_create_target(tmp_path: Path)
 
     assert summary.dry_run
     assert Path("AGENTS.md") in summary.files
+    assert Path(".scaffold-guard/manifest.json") in summary.files
     assert not (tmp_path / "demo").exists()
+
+
+def test_scaffold_package_project_writes_manifest(tmp_path: Path) -> None:
+    """Init writes managed-file metadata for the rendered scaffold."""
+    target_dir = tmp_path / "demo"
+
+    summary = scaffold_package_project(_init_options(tmp_path, agent="codex"))
+
+    assert Path(".scaffold-guard/manifest.json") in summary.files
+    manifest = load_manifest(target_dir / ".scaffold-guard/manifest.json")
+    files = {file.path: file for file in manifest.files}
+    assert manifest.profile == "python"
+    assert manifest.adapters == ("codex",)
+    assert manifest.generated_with
+    assert manifest.requires_scaffold_guard.startswith(">=")
+    assert files["AGENTS.md"].template_id == "package/AGENTS.md"
+    assert files["AGENTS.md"].sha256
+    assert "pyproject.toml" not in files
+    assert "src/demo/core.py" not in files
+    assert ".scaffold-guard/manifest.json" not in files
+
+
+def test_scaffold_package_project_rejects_existing_manifest_before_writes(tmp_path: Path) -> None:
+    """The manifest participates in generated destination conflict preflight."""
+    target_dir = tmp_path / "demo"
+    manifest_path = target_dir / ".scaffold-guard" / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text("old\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match=r"manifest\.json"):
+        scaffold_package_project(_init_options(tmp_path, agent="codex"))
+
+    assert not (target_dir / "AGENTS.md").exists()
+
+
+def test_scaffold_package_project_rejects_symlinked_manifest_before_writes(
+    tmp_path: Path,
+) -> None:
+    """A symlinked manifest path fails during preflight before other files are written."""
+    target_dir = tmp_path / "demo"
+    manifest_path = target_dir / ".scaffold-guard" / "manifest.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.symlink_to(tmp_path / "missing-manifest.json")
+
+    with pytest.raises(FileExistsError, match=r"manifest\.json"):
+        scaffold_package_project(_init_options(tmp_path, agent="codex"))
+
+    assert not (target_dir / "AGENTS.md").exists()
+
+
+def test_scaffold_package_project_rejects_symlinked_manifest_parent_before_writes(
+    tmp_path: Path,
+) -> None:
+    """A symlinked destination parent is rejected even when it resolves inside root."""
+    target_dir = tmp_path / "demo"
+    real_metadata_dir = target_dir / "real-metadata"
+    symlinked_metadata_dir = target_dir / ".scaffold-guard"
+    real_metadata_dir.mkdir(parents=True)
+    symlinked_metadata_dir.symlink_to(real_metadata_dir, target_is_directory=True)
+
+    with pytest.raises(FileExistsError, match=r"symbolic link"):
+        scaffold_package_project(_init_options(tmp_path, agent="codex"))
+
+    assert not (target_dir / "AGENTS.md").exists()
+
+
+def test_build_project_manifest_sorts_managed_paths_and_hashes_content(tmp_path: Path) -> None:
+    """Manifest entries are deterministic and exclude non-managed rendered files."""
+    options = replace(
+        _init_options(tmp_path, agent="codex"),
+        adapter_selection=("codex", "claude"),
+    )
+    manifest = build_project_manifest(
+        options,
+        (
+            _rendered_file("b.txt", "second\n", lifecycle="seed"),
+            _rendered_file("a.txt", "first\n", lifecycle="managed"),
+            _rendered_file("c.toml", "structured\n", lifecycle="structured"),
+        ),
+    )
+
+    assert [file.path for file in manifest.files] == ["a.txt"]
+    assert manifest.adapters == ("codex", "claude")
+    assert manifest.files[0].sha256
 
 
 def test_write_rendered_files_dry_run_does_not_touch_filesystem(tmp_path: Path) -> None:
@@ -548,7 +753,7 @@ def test_write_rendered_files_dry_run_does_not_touch_filesystem(tmp_path: Path) 
     target_dir = tmp_path / "demo"
     planned = write_rendered_files(
         target_dir,
-        [RenderedFile(path=Path("README.md"), content="# Demo\n")],
+        [_rendered_file("README.md", "# Demo\n")],
         dry_run=True,
         force=False,
     )
@@ -563,7 +768,7 @@ def test_write_rendered_files_writes_inside_target_directory(tmp_path: Path) -> 
 
     planned = write_rendered_files(
         target_dir,
-        [RenderedFile(path=Path("docs/index.md"), content="# Docs\n")],
+        [_rendered_file("docs/index.md", "# Docs\n")],
         dry_run=False,
         force=False,
     )
@@ -580,7 +785,7 @@ def test_write_rendered_files_rejects_file_as_target_directory(tmp_path: Path) -
     with pytest.raises(NotADirectoryError, match="not a directory"):
         write_rendered_files(
             target_file,
-            [RenderedFile(path=Path("README.md"), content="new\n")],
+            [_rendered_file("README.md", "new\n")],
             dry_run=False,
             force=False,
         )
@@ -595,7 +800,14 @@ def test_write_rendered_files_rejects_paths_that_escape_target(
     with pytest.raises(ValueError, match=r"Generated file path|outside target"):
         write_rendered_files(
             tmp_path / "demo",
-            [RenderedFile(path=unsafe_path, content="escape\n")],
+            [
+                RenderedFile(
+                    path=unsafe_path,
+                    content="escape\n",
+                    template_id="test/escape",
+                    lifecycle="seed",
+                )
+            ],
             dry_run=False,
             force=False,
         )
@@ -609,10 +821,10 @@ def test_write_rendered_files_rejects_symlinked_parent_escape(tmp_path: Path) ->
     outside_dir.mkdir()
     (target_dir / "linked").symlink_to(outside_dir, target_is_directory=True)
 
-    with pytest.raises(ValueError, match="outside target directory"):
+    with pytest.raises(FileExistsError, match="symbolic link"):
         write_rendered_files(
             target_dir,
-            [RenderedFile(path=Path("linked/escape.md"), content="escape\n")],
+            [_rendered_file("linked/escape.md", "escape\n")],
             dry_run=False,
             force=False,
         )
@@ -630,7 +842,7 @@ def test_write_rendered_files_preserves_existing_files_without_force(tmp_path: P
     with pytest.raises(FileExistsError):
         write_rendered_files(
             target_dir,
-            [RenderedFile(path=Path("README.md"), content="new\n")],
+            [_rendered_file("README.md", "new\n")],
             dry_run=False,
             force=False,
         )
@@ -647,12 +859,27 @@ def test_write_rendered_files_overwrites_existing_files_with_force(tmp_path: Pat
 
     write_rendered_files(
         target_dir,
-        [RenderedFile(path=Path("README.md"), content="new\n")],
+        [_rendered_file("README.md", "new\n")],
         dry_run=False,
         force=True,
     )
 
     assert existing.read_text(encoding="utf-8") == "new\n"
+
+
+def _rendered_file(
+    path: str,
+    content: str,
+    *,
+    lifecycle: TemplateLifecycle = "seed",
+) -> RenderedFile:
+    """Build a rendered file fixture with stable lifecycle metadata."""
+    return RenderedFile(
+        path=Path(path),
+        content=content,
+        template_id=f"test/{path}",
+        lifecycle=lifecycle,
+    )
 
 
 def _init_options(
@@ -688,6 +915,25 @@ def _init_options(
         pyright=pyright,
         biome=typescript_tools[0],
         vitest=typescript_tools[1],
+    )
+
+
+def _tool_matrix(
+    profile: ProfileChoice,
+) -> tuple[tuple[bool, bool, bool, tuple[bool, bool]], ...]:
+    """Return relevant optional tool combinations for one generated profile."""
+    python_tool_sets = ((True, True, True), (False, False, False))
+    typescript_tool_sets = ((True, True), (False, False))
+    if profile == "minimal":
+        return ((True, True, True, (True, True)),)
+    if profile == "python":
+        return tuple((*python_tools, (True, True)) for python_tools in python_tool_sets)
+    if profile == "typescript":
+        return tuple((True, True, True, ts_tools) for ts_tools in typescript_tool_sets)
+    return tuple(
+        (*python_tools, ts_tools)
+        for python_tools in python_tool_sets
+        for ts_tools in typescript_tool_sets
     )
 
 

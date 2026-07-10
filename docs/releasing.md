@@ -30,6 +30,7 @@ Actions before PyPI upload completes.
    ```text
    pyproject.toml
    src/scaffold_guard/__init__.py
+   tests/integration/test_import_package.py
    uv.lock
    CHANGELOG.md
    ```

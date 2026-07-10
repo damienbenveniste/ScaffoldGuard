@@ -5,7 +5,7 @@ import json
 import py_compile
 import sys
 import tomllib
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
@@ -14,8 +14,13 @@ from typing import Protocol, cast
 import pytest
 from typer.testing import CliRunner
 
+from scaffold_guard import __version__
 from scaffold_guard.cli import app
-from scaffold_guard.versions import PUBLISH_CAPABLE_MINIMUM_VERSION
+from scaffold_guard.versions import (
+    GENERATED_PROJECT_MINIMUM_VERSION,
+    MANIFEST_VERSION,
+    PROJECT_FORMAT_VERSION,
+)
 
 SUCCESS = 0
 CONFIG_ERROR = 2
@@ -31,6 +36,7 @@ CODEX_ADAPTER_FILES = {
     Path(".codex/rules/git.rules"),
     Path(".codex/rules/validation.rules"),
 }
+MANIFEST_FILE = Path(".scaffold-guard/manifest.json")
 BASE_PACKAGE_FILES = {
     Path("AGENTS.md"),
     Path("README.md"),
@@ -49,6 +55,7 @@ BASE_PACKAGE_FILES = {
     Path("tests/unit/test_core.py"),
     Path("tests/integration/test_import_package.py"),
     Path("scaffold-guard.toml"),
+    MANIFEST_FILE,
 } | CODEX_ADAPTER_FILES
 BASE_PACKAGE_GITLAB_FILES = (
     BASE_PACKAGE_FILES - {Path(".github/workflows/ci.yml"), Path(".github/workflows/docs.yml")}
@@ -61,6 +68,7 @@ BASE_MINIMAL_FILES = {
     Path(".gitignore"),
     Path(".github/workflows/ci.yml"),
     Path("scaffold-guard.toml"),
+    MANIFEST_FILE,
 } | CODEX_ADAPTER_FILES
 BASE_MINIMAL_GITLAB_FILES = (BASE_MINIMAL_FILES - {Path(".github/workflows/ci.yml")}) | {
     Path(".gitlab-ci.yml")
@@ -80,6 +88,7 @@ BASE_TYPESCRIPT_FILES = {
     Path("src/index.ts"),
     Path("tests/index.test.ts"),
     Path("scaffold-guard.toml"),
+    MANIFEST_FILE,
 } | CODEX_ADAPTER_FILES
 BASE_MONOREPO_FILES = {
     Path("AGENTS.md"),
@@ -104,6 +113,7 @@ BASE_MONOREPO_FILES = {
     Path("packages/typescript/src/index.ts"),
     Path("packages/typescript/tests/index.test.ts"),
     Path("scaffold-guard.toml"),
+    MANIFEST_FILE,
 } | CODEX_ADAPTER_FILES
 
 
@@ -115,11 +125,11 @@ class GreetingPackage(Protocol):
         ...
 
 
-def _assert_publish_capable_dependency(pyproject: dict[str, object]) -> None:
-    """Generated projects must pin a publish-capable ScaffoldGuard version."""
+def _assert_generated_project_dependency(pyproject: dict[str, object]) -> None:
+    """Generated projects must pin a lifecycle-capable ScaffoldGuard version."""
     dependency_groups = cast("dict[str, list[str]]", pyproject["dependency-groups"])
 
-    assert f"scaffold-guard>={PUBLISH_CAPABLE_MINIMUM_VERSION}" in dependency_groups["dev"]
+    assert f"scaffold-guard>={GENERATED_PROJECT_MINIMUM_VERSION}" in dependency_groups["dev"]
 
 
 def test_init_codex_generates_valid_package_tree(
@@ -142,8 +152,28 @@ def test_init_codex_generates_valid_package_tree(
     mkdocs_config = (project_dir / "mkdocs.yml").read_text(encoding="utf-8")
     assert pyproject["tool"]["ruff"]["target-version"] == "py313"
     assert pyproject["tool"]["mypy"]["python_version"] == "3.13"
-    _assert_publish_capable_dependency(pyproject)
+    _assert_generated_project_dependency(pyproject)
     assert config["project"]["profile"] == "python"
+    assert config["scaffold_guard"]["format_version"] == PROJECT_FORMAT_VERSION
+    assert config["scaffold_guard"]["requires_scaffold_guard"] == (
+        f">={GENERATED_PROJECT_MINIMUM_VERSION}"
+    )
+    assert set(config["scaffold_guard"]) == {
+        "format_version",
+        "generated_with",
+        "requires_scaffold_guard",
+    }
+    manifest = json.loads((project_dir / MANIFEST_FILE).read_text(encoding="utf-8"))
+    manifest_files = {file["path"]: file for file in manifest["files"]}
+    assert manifest["manifest_version"] == MANIFEST_VERSION
+    assert manifest["project_format_version"] == PROJECT_FORMAT_VERSION
+    assert manifest["generated_with"] == __version__
+    assert manifest["requires_scaffold_guard"] == f">={GENERATED_PROJECT_MINIMUM_VERSION}"
+    assert manifest["adapters"] == ["codex"]
+    assert manifest_files["AGENTS.md"]["template_id"] == "package/AGENTS.md"
+    assert "lifecycle" not in manifest_files["AGENTS.md"]
+    assert "pyproject.toml" not in manifest_files
+    assert "src/demo/core.py" not in manifest_files
     assert 'site_name: "demo"' in mkdocs_config
     assert "docs_dir: docs" in mkdocs_config
     assert "  - Home: index.md" in mkdocs_config
@@ -167,6 +197,38 @@ def test_init_codex_generates_valid_package_tree(
         assert package.greet("Codex") == "Hello, Codex!"
 
 
+@pytest.mark.parametrize("profile", ["typescript", "monorepo"])
+def test_generated_manifest_is_not_ignored(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    profile: str,
+) -> None:
+    """The tracked lifecycle manifest is not excluded by generated gitignore rules."""
+    project_dir = generated_project(tmp_path, profile=profile)
+
+    gitignore = (project_dir / ".gitignore").read_text(encoding="utf-8")
+
+    assert ".scaffold-guard" not in gitignore
+
+
+@pytest.mark.parametrize("profile", ["typescript", "monorepo"])
+def test_check_allows_generated_python_tool_carrier_venv(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+    profile: str,
+) -> None:
+    """TypeScript-bearing profiles ignore the Python tool-carrier virtualenv."""
+    project_dir = generated_project(tmp_path, profile=profile)
+    (project_dir / ".venv").mkdir()
+
+    gitignore = (project_dir / ".gitignore").read_text(encoding="utf-8")
+    check_result = CliRunner().invoke(app, ["check", "--path", str(project_dir)])
+
+    assert ".venv/" in gitignore
+    assert check_result.exit_code == SUCCESS, check_result.output
+    assert "- unsafe-patterns: ok" in check_result.output
+
+
 def test_init_accepts_legacy_package_profile_alias(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -181,7 +243,7 @@ def test_init_accepts_legacy_package_profile_alias(
     config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
     pyproject = tomllib.loads((project_dir / "pyproject.toml").read_text(encoding="utf-8"))
     assert config["project"]["profile"] == "python"
-    _assert_publish_capable_dependency(pyproject)
+    _assert_generated_project_dependency(pyproject)
     assert (project_dir / "src/demo/core.py").exists()
     assert "Created ScaffoldGuard python project: demo" in result.output
 
@@ -306,12 +368,21 @@ def test_init_can_generate_typescript_profile(
     assert not (project_dir / ".cursor").exists()
     pyproject = tomllib.loads((project_dir / "pyproject.toml").read_text(encoding="utf-8"))
     package_json = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))
+    biome_json = json.loads((project_dir / "biome.json").read_text(encoding="utf-8"))
     config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
     _assert_json_has_no_blank_lines(project_dir / "package.json")
-    _assert_publish_capable_dependency(pyproject)
+    _assert_generated_project_dependency(pyproject)
     assert pyproject["tool"]["uv"]["package"] is False
     assert package_json["scripts"]["typecheck"] == "tsc --noEmit"
-    assert package_json["devDependencies"]["@biomejs/biome"].startswith("^2.")
+    assert package_json["devDependencies"]["@biomejs/biome"] == "^2.5.0"
+    assert biome_json["files"]["includes"] == [
+        "**",
+        "!.venv",
+        "!.scaffold-guard",
+        "!dist",
+        "!coverage",
+    ]
+    assert biome_json["linter"]["rules"] == {"preset": "recommended"}
     assert config["project"]["profile"] == "typescript"
     assert config["features"]["typescript"] is True
     assert config["tools"]["biome"] is True
@@ -456,11 +527,13 @@ def test_init_can_generate_python_typescript_monorepo_profile(
     _assert_json_has_no_blank_lines(project_dir / "packages/typescript/package.json")
     assert package_json["workspaces"] == ["packages/typescript"]
     assert package_json["scripts"]["ts:typecheck"].startswith("tsc -p packages/typescript")
+    assert package_json["devDependencies"]["@biomejs/biome"] == "^2.5.0"
     assert biome_json["files"]["includes"] == [
         "packages/typescript/**",
-        "!!packages/typescript/dist",
-        "!!packages/typescript/coverage",
+        "!packages/typescript/dist",
+        "!packages/typescript/coverage",
     ]
+    assert biome_json["linter"]["rules"] == {"preset": "recommended"}
     assert config["project"]["profile"] == "monorepo"
     assert config["features"]["python"] is True
     assert config["features"]["typescript"] is True
@@ -848,7 +921,7 @@ def test_init_all_generates_all_adapter_files(
     assert "Use read-only subagents for bounded work" in agents
     assert "Use dataclasses for internal structured state" in agents
     assert "TypedDict" in agents
-    _assert_publish_capable_dependency(pyproject)
+    _assert_generated_project_dependency(pyproject)
     assert pyproject["tool"]["uv"]["package"] is False
     assert 'pattern = ["uv", "run", "scaffold-guard", "publish"]' in codex_git_rules
     assert 'pattern = ["scaffold-guard", "publish"]' not in codex_git_rules

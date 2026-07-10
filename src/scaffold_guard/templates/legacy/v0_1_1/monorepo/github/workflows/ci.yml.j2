@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python {% raw %}${{ matrix.python-version }}{% endraw %}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.3.0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: {% raw %}${{ matrix.python-version }}{% endraw %}
+
+      - name: Sync workspace
+        run: uv sync --all-groups --python {% raw %}${{ matrix.python-version }}{% endraw %}
+
+      - name: Agent policy check
+        run: uv run scaffold-guard check
+
+{% if use_ruff %}
+      - name: Check Python formatting
+        run: uv run ruff format --check packages/python
+
+      - name: Lint Python
+        run: uv run ruff check packages/python
+
+{% endif %}
+{% if use_mypy %}
+      - name: Type check Python with mypy
+        run: uv run mypy packages/python/src packages/python/tests packages/python/examples
+
+{% endif %}
+{% if use_pyright %}
+      - name: Type check Python with Pyright
+        run: uv run pyright
+
+{% endif %}
+      - name: Test Python
+        run: >
+          uv run pytest packages/python/tests
+          --cov={{ package_name }}
+          --cov-report=term-missing
+          --cov-fail-under={{ coverage }}
+
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+
+{% if use_biome %}
+      - name: Check TypeScript formatting
+        run: npm run ts:format:check
+
+      - name: Lint TypeScript
+        run: npm run ts:lint
+
+{% endif %}
+      - name: Type check TypeScript
+        run: npm run ts:typecheck
+
+{% if use_vitest %}
+      - name: Test TypeScript
+        run: npm run ts:test
+
+{% endif %}
+      - name: Build TypeScript
+        run: npm run ts:build
+
+{% if use_vitest %}
+      - name: Check TypeScript coverage
+        run: npm run ts:coverage
+{% endif %}

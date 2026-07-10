@@ -20,7 +20,7 @@ scaffold-guard validate --quick
 ```
 
 Use the [command reference](commands.md) for the full CLI surface, including
-`inspect-diff`, `validate`, `publish`, `compile-rules`, `doctor`, and
+`inspect-diff`, `validate`, `upgrade`, `publish`, `compile-rules`, `doctor`, and
 `version`.
 
 Profile choices:
@@ -119,3 +119,26 @@ instruction file exactly matches the content ScaffoldGuard would render. A
 generated marker alone is not proof that the file can be replaced. Use
 `--force` only after review when you intentionally want to replace managed
 generated files.
+
+Preview a generated-project upgrade before writing files:
+
+```bash
+scaffold-guard upgrade
+```
+
+Apply only after reviewing the preview and explicitly choosing to write:
+
+```bash
+scaffold-guard upgrade --apply
+scaffold-guard check
+scaffold-guard validate
+```
+
+`upgrade` is read-only by default. It reconciles only hash-clean managed files,
+limits structured migrations to reserved metadata in `scaffold-guard.toml` and
+the `scaffold-guard` development requirement or tool-carrier in
+`pyproject.toml`, and never touches seed files. A manifest-less `0.1.x` project
+whose managed files exactly match a packaged baseline is adopted without flags.
+Use `--accept-legacy PATH` only for a reviewed, recognized, marker-bearing
+managed file that differs; unmarked CI or config files require manual
+resolution. Orphans are reported and never deleted or pruned.

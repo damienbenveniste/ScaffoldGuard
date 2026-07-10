@@ -1,0 +1,12 @@
+stages:
+  - check
+
+scaffoldguard:
+  stage: check
+  image: python:3.13-slim
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install uv
+    - uv tool install scaffold-guard
+  script:
+    - scaffold-guard check

@@ -6,6 +6,11 @@ python_min = "{{ python_min }}"
 coverage_fail_under = {{ coverage }}
 ci = "{{ ci_provider }}"
 
+[scaffold_guard]
+format_version = {{ project_format_version }}
+generated_with = "{{ scaffold_guard_version }}"
+requires_scaffold_guard = "{{ generated_project_minimum_specifier }}"
+
 [agents]
 codex = {{ codex_enabled }}
 claude = {{ claude_enabled }}

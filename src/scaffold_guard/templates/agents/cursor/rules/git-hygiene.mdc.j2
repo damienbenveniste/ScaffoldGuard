@@ -13,4 +13,5 @@ alwaysApply: true
 - Use subagents for bounded, read-only reconnaissance, test triage, docs review, or issue/PR summarization when that keeps bulky exploration out of the main thread.
 - Give subagents explicit scope and verify their findings before editing.
 - Before claiming done, state validation commands and results.
+- `uv run scaffold-guard upgrade` is safe to run as a preview. Do not run `uv run scaffold-guard upgrade --apply` unless the user explicitly asks for the apply step and you have reviewed the generated upgrade plan.
 - When the user asks to commit, push, or publish, prefer `uv run scaffold-guard publish --message "<message>" --all` after reviewing the dirty scope, or use repeated `--file PATH` options for an exact scope. Use `--push-only` only when the working tree is clean.

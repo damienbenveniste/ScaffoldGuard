@@ -66,6 +66,12 @@ These rules apply to every code, test, documentation, and configuration change i
 - Keep examples small, realistic, and runnable.
 - Do not document future behavior as if it works today.
 
+## ScaffoldGuard Upgrades
+
+- `uv run scaffold-guard upgrade` is safe to run as a preview.
+- Do not run `uv run scaffold-guard upgrade --apply` unless the user explicitly
+  asks for the apply step and you have reviewed the generated upgrade plan.
+
 ## Security and Secret Handling
 
 - Never commit secrets, `.env`, `.venv`, `node_modules`, local credentials, private payloads, or runtime artifacts.

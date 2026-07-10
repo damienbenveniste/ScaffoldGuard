@@ -24,6 +24,7 @@ from scaffold_guard.scaffold import (
     scaffold_package_project,
     with_quality_tools,
 )
+from scaffold_guard.upgrade import UpgradeError, UpgradeResult, run_upgrade
 from scaffold_guard.validation import ValidationError, ValidationReport, run_validation
 
 
@@ -576,6 +577,23 @@ def _print_compile_rules_summary(summary: CompileRulesSummary) -> None:
         typer.echo(f"  - {file_path.as_posix()}")
 
 
+def _print_upgrade_result(result: UpgradeResult) -> None:
+    """Print a human-readable upgrade summary."""
+    action = "Applied" if result.applied else "Planned"
+    typer.echo(f"{action} ScaffoldGuard upgrade: {result.plan.path}")
+    typer.echo(f"current: {result.plan.current.profile}")
+    typer.echo(f"target: {result.plan.target.profile}")
+    typer.echo("Actions:")
+    for upgrade_action in result.plan.actions:
+        typer.echo(
+            f"  - {upgrade_action.kind}: {upgrade_action.path.as_posix()} ({upgrade_action.reason})"
+        )
+    if result.post_apply_verification is not None:
+        typer.echo(
+            f"post-apply verification: {'ok' if result.post_apply_verification.ok else 'failed'}"
+        )
+
+
 def _print_validation_report(report: ValidationReport) -> None:
     """Print a validation command summary."""
     typer.echo(f"scaffold-guard validate: {'ok' if report.ok else 'failed'}")
@@ -911,9 +929,9 @@ def compile_rules_command(
         ),
     ] = Path(),
     agent: Annotated[
-        AgentOption,
+        AgentOption | None,
         typer.Option("--agent", help="Agent adapter files to compile."),
-    ] = AgentOption.ALL,
+    ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show planned files only.")] = False,
     force: Annotated[bool, typer.Option("--force", help="Overwrite generated files.")] = False,
 ) -> None:
@@ -921,14 +939,74 @@ def compile_rules_command(
     try:
         summary = compile_rules(
             path,
-            agent=agent.value,
+            agent=None if agent is None else agent.value,
             dry_run=dry_run,
             force=force,
         )
-    except (ProjectConfigError, FileExistsError, NotADirectoryError, ValueError) as exc:
+    except (
+        ProjectConfigError,
+        UpgradeError,
+        FileExistsError,
+        NotADirectoryError,
+        ValueError,
+    ) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
     _print_compile_rules_summary(summary)
+
+
+@app.command("upgrade")
+def upgrade_command(
+    path: Annotated[
+        Path,
+        typer.Option(
+            "--path",
+            help="Generated project root to upgrade.",
+            resolve_path=True,
+        ),
+    ] = Path(),
+    apply: Annotated[bool, typer.Option("--apply", help="Apply the planned upgrade.")] = False,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = False,
+    accept_legacy: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--accept-legacy",
+            help="Accept one exact marker-bearing legacy managed file path.",
+        ),
+    ] = None,
+) -> None:
+    """Preview or apply a generated-project upgrade."""
+    try:
+        result = run_upgrade(path, apply=apply, accept_legacy=tuple(accept_legacy or ()))
+    except (ProjectConfigError, UpgradeError, OSError, ValueError) as exc:
+        if json_output:
+            typer.echo(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "path": str(path),
+                        "applied": False,
+                        "current": None,
+                        "target": None,
+                        "actions": [],
+                        "conflicts": [],
+                        "post_apply_verification": None,
+                        "error": str(exc),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            typer.echo(f"Error: {exc}", err=True)
+        code = 1 if isinstance(exc, UpgradeError) and exc.kind == "conflict" else 2
+        raise typer.Exit(code=code) from exc
+    if json_output:
+        typer.echo(json.dumps(result.to_json(), indent=2, sort_keys=True))
+    else:
+        _print_upgrade_result(result)
+    if result.exit_code:
+        raise typer.Exit(code=result.exit_code)
 
 
 @app.command("doctor")

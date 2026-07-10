@@ -1,11 +1,17 @@
 """Shared interfaces for agent-specific generated files."""
 
+from collections.abc import Iterable
 from typing import Protocol
 
 from scaffold_guard.adapters.claude import ClaudeAdapter
 from scaffold_guard.adapters.codex import CodexAdapter
 from scaffold_guard.adapters.cursor import CursorAdapter
-from scaffold_guard.models import AgentChoice, TemplateSpec
+from scaffold_guard.models import (
+    AdapterSelection,
+    AgentChoice,
+    TemplateSpec,
+    adapter_selection_for_agent,
+)
 
 
 class AgentAdapter(Protocol):
@@ -17,11 +23,18 @@ class AgentAdapter(Protocol):
 
 
 def adapters_for(agent: AgentChoice) -> tuple[AgentAdapter, ...]:
-    """Return concrete adapters selected by a `scaffold-guard init` option."""
-    if agent == "codex":
-        return (CodexAdapter(),)
-    if agent == "claude":
-        return (ClaudeAdapter(),)
-    if agent == "cursor":
-        return (CursorAdapter(),)
-    return (CodexAdapter(), ClaudeAdapter(), CursorAdapter())
+    """Return concrete adapters selected by a `scaffold-guard init` shorthand."""
+    return adapters_for_selection(adapter_selection_for_agent(agent))
+
+
+def adapters_for_selection(selection: Iterable[AdapterSelection]) -> tuple[AgentAdapter, ...]:
+    """Return concrete adapters for an exact adapter selection."""
+    adapters: list[AgentAdapter] = []
+    for adapter_name in selection:
+        if adapter_name == "codex":
+            adapters.append(CodexAdapter())
+        if adapter_name == "claude":
+            adapters.append(ClaudeAdapter())
+        if adapter_name == "cursor":
+            adapters.append(CursorAdapter())
+    return tuple(adapters)

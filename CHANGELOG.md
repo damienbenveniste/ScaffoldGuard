@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 - 2026-07-09
+
+- Added versioned generated-project metadata and deterministic managed-file
+  manifests with exact content hashes.
+- Added preview-first `scaffold-guard upgrade` with safe structured migrations,
+  strict legacy handling, transactional application, and adapter parity.
+- Added built-wheel smoke coverage for every generated project profile.
+
 ## 0.1.5 - 2026-07-09
 
 - Fixed `compile-rules` so generated markers alone no longer authorize an

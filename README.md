@@ -122,6 +122,7 @@ The default `minimal` profile creates guardrails only:
 
 ```text
 my_project/
+  .scaffold-guard/manifest.json
   AGENTS.md
   .codex/config.toml
   .codex/hooks.json
@@ -140,6 +141,7 @@ The `python` profile adds a Python package scaffold:
 
 ```text
 my_project/
+  .scaffold-guard/manifest.json
   AGENTS.md
   README.md
   LICENSE
@@ -160,6 +162,7 @@ compiler strictness, Biome, and Vitest defaults:
 
 ```text
 my_project/
+  .scaffold-guard/manifest.json
   AGENTS.md
   README.md
   LICENSE
@@ -179,6 +182,7 @@ The `monorepo` profile adds Python and TypeScript workspaces:
 
 ```text
 my_project/
+  .scaffold-guard/manifest.json
   AGENTS.md
   README.md
   LICENSE
@@ -217,6 +221,7 @@ scaffold-guard init [NAME] [--guided] [--profile minimal|python|typescript|monor
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]
+scaffold-guard upgrade [--path .] [--apply] [--json] [--accept-legacy PATH]
 uv run scaffold-guard publish [--path .] --message "Update project" [--all|--file PATH] [--remote origin] [--branch feature] [--quick]
 scaffold-guard compile-rules [--path .] [--agent codex|claude|cursor|all] [--dry-run] [--force]
 scaffold-guard doctor [--path .] [--json]
@@ -227,13 +232,23 @@ scaffold-guard version
 their current content exactly matches the content ScaffoldGuard would render.
 Generated markers identify managed files, but markers alone are not proof that a
 file can be replaced. Use `--force` only after review when replacement is
-intentional.
+intentional. After installing a newer ScaffoldGuard version, preview and apply
+`scaffold-guard upgrade` before running `compile-rules` so structured metadata
+and managed templates advance together.
 
 Use repo-local `uv run scaffold-guard publish --message "Update project" --all`
 only after an explicit user request to publish from a generated project. The
 repo-local invocation resolves the generated project's pinned ScaffoldGuard
 version, runs generated-project validation, refuses mixed staged and unstaged
 scope, commits with an explicit message, and pushes the reviewed branch.
+
+Use `scaffold-guard upgrade` to preview generated-project maintenance before
+writing anything. Add `--apply` only after reviewing the preview and explicitly
+choosing to write. Upgrades reconcile hash-clean managed files, limit structured
+migrations to reserved metadata in `scaffold-guard.toml` and the
+`scaffold-guard` development requirement or tool-carrier in `pyproject.toml`,
+and never touch seed files. Orphans are reported, not deleted or pruned. After
+an applied upgrade, run `scaffold-guard check` and `scaffold-guard validate`.
 
 Profile choices:
 
@@ -267,7 +282,7 @@ uv build
 
 V1 is a developer CLI, not a SaaS product or policy server. It does not include
 telemetry, external AI calls, Claude hooks, a plugin system, Homebrew
-automation, or automatic upgrades for mature existing repositories.
+automation, or automatic adoption of mature existing repositories.
 
 Homebrew distribution, more specialized project profiles, and richer policy
 configuration are intentionally deferred until after the PyPI package is stable.

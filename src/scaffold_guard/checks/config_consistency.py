@@ -73,24 +73,24 @@ def _check_agent_file_consistency(
     agent_table = _object_mapping(agents)
     codex_enabled = bool_value(agent_table, "codex", default=True)
     findings.extend(_check_codex_file_consistency(root, codex_enabled))
-    if bool_value(agent_table, "claude", default=False) != (root / "CLAUDE.md").exists():
-        findings.append(
-            finding(
-                "CLAUDE.md",
-                line=0,
-                code="agent-config-mismatch",
-                message="scaffold-guard.toml Claude setting does not match CLAUDE.md.",
-            )
+    findings.extend(
+        _check_adapter_path_consistency(
+            root,
+            enabled=bool_value(agent_table, "claude", default=False),
+            selected_path=Path("CLAUDE.md"),
+            family_path=Path(".claude"),
+            adapter_name="Claude",
         )
-    if bool_value(agent_table, "cursor", default=False) != (root / ".cursor/rules").exists():
-        findings.append(
-            finding(
-                ".cursor/rules",
-                line=0,
-                code="agent-config-mismatch",
-                message="scaffold-guard.toml Cursor setting does not match .cursor/rules.",
-            )
+    )
+    findings.extend(
+        _check_adapter_path_consistency(
+            root,
+            enabled=bool_value(agent_table, "cursor", default=False),
+            selected_path=Path(".cursor/rules"),
+            family_path=Path(".cursor"),
+            adapter_name="Cursor",
         )
+    )
     return findings
 
 
@@ -114,11 +114,47 @@ def _check_codex_file_consistency(root: Path, codex_enabled: bool) -> list[Check
             finding(
                 ".codex",
                 line=0,
-                code="agent-config-mismatch",
-                message="scaffold-guard.toml disables Codex but .codex adapter files exist.",
+                severity="warning",
+                code="agent-config-orphan",
+                message="Deselected Codex adapter files remain as upgrade orphans.",
             )
         )
     return findings
+
+
+def _check_adapter_path_consistency(
+    root: Path,
+    *,
+    enabled: bool,
+    selected_path: Path,
+    family_path: Path,
+    adapter_name: str,
+) -> list[CheckFinding]:
+    """Error for a selected missing adapter and warn for deselected remnants."""
+    selected_exists = (root / selected_path).exists()
+    family_exists = (root / family_path).exists()
+    if enabled and not selected_exists:
+        return [
+            finding(
+                selected_path,
+                line=0,
+                code="agent-config-mismatch",
+                message=(
+                    f"scaffold-guard.toml enables {adapter_name} but {selected_path} is missing."
+                ),
+            )
+        ]
+    if not enabled and (selected_exists or family_exists):
+        return [
+            finding(
+                family_path,
+                line=0,
+                severity="warning",
+                code="agent-config-orphan",
+                message=f"Deselected {adapter_name} adapter files remain as upgrade orphans.",
+            )
+        ]
+    return []
 
 
 def _check_coverage(project: object, pyproject_text: str) -> list[CheckFinding]:

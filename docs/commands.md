@@ -11,13 +11,15 @@ Use this loop while changing a generated project:
 ```bash
 scaffold-guard check
 scaffold-guard inspect-diff
+scaffold-guard upgrade
 scaffold-guard validate --quick
 scaffold-guard validate
 uv run scaffold-guard publish --message "Update project" --all
 ```
 
 `check` is the fast policy gate. `inspect-diff` tells you which validation
-evidence a change needs. `validate --quick` runs the generated quick gate.
+evidence a change needs. `upgrade` previews generated-project maintenance
+without writing files. `validate --quick` runs the generated quick gate.
 `validate` runs the full configured gate. Repo-local
 `uv run scaffold-guard publish` validates, commits, and pushes an explicitly
 reviewed scope with the ScaffoldGuard version pinned by the generated project.
@@ -122,6 +124,93 @@ Exit codes:
 | `1` | A configured validation command failed |
 | `2` | Configuration or tool error |
 
+## `upgrade`
+
+Preview or apply a generated-project upgrade.
+
+```bash
+scaffold-guard upgrade [--path .] [--apply] [--json] [--accept-legacy PATH]
+```
+
+Preview is the default and is read-only. Use it first to inspect the ordered
+file actions and any conflicts:
+
+```bash
+scaffold-guard upgrade
+```
+
+Pass `--apply` only after reviewing the preview and explicitly choosing to let
+ScaffoldGuard write the upgrade. Any conflict prevents apply:
+
+```bash
+scaffold-guard upgrade --apply
+scaffold-guard check
+scaffold-guard validate
+```
+
+`upgrade` works from generated-project metadata. Current generated projects have
+`.scaffold-guard/manifest.json` plus a reserved `[scaffold_guard]` table in
+`scaffold-guard.toml`. The manifest contains project metadata and managed-file
+records only. Its project metadata includes `manifest_version`,
+`project_format_version`, `generated_with`, `requires_scaffold_guard`, `profile`,
+and `adapters`. Each `files` record has exactly `path`, a stable `template_id`,
+and `sha256` for the exact file bytes. The manifest does not store `structured`
+or `seed` entries, and its file records have no lifecycle field.
+
+The reserved `[scaffold_guard]` table contains exactly `format_version`,
+`generated_with`, and `requires_scaffold_guard`.
+
+File ownership is lifecycle-based:
+
+| Lifecycle | Upgrade behavior |
+|---|---|
+| `managed` | Reconciled only when the recorded hash proves the current file still matches the generated baseline |
+| `structured` | Limited to reserved metadata in `scaffold-guard.toml` and the `scaffold-guard` development requirement or tool-carrier in `pyproject.toml` |
+| `seed` | User-owned immediately after generation and never touched by upgrade |
+
+The public action kinds are exactly `unchanged`, `add`, `update`, `migrate`,
+`conflict`, and `orphan`, in that order:
+
+| Action | Meaning |
+|---|---|
+| `unchanged` | Current content already matches the desired content |
+| `add` | A missing generated path or required tool-carrier can be added |
+| `update` | A managed file has a clean recorded baseline and new generated content |
+| `migrate` | A supported structured field change can be made |
+| `conflict` | Drift, ambiguity, or an unsafe path prevents apply |
+| `orphan` | A previously managed path is no longer selected and remains in place |
+
+Use `--json` when tooling needs structured output. `applied` is a top-level
+result boolean, not an action or status: it is `false` for previews and when
+conflicts prevent apply, and `true` when the apply path runs.
+
+Manifest-less `0.1.x` projects use strict legacy baseline recognition. A legacy
+project whose complete managed surface exactly matches a packaged baseline is
+adopted without flags. Use `--accept-legacy PATH` only for one reviewed,
+recognized, marker-bearing managed file that differs from that baseline; repeat
+the option for each such path. Unmarked CI or config files, unrecognized paths,
+missing expected files, and ambiguous legacy content remain conflicts and
+require manual resolution.
+
+Legacy `0.1.x` TypeScript and monorepo projects may still have
+`.scaffold-guard/` in their user-owned seed `.gitignore`; upgrade does not edit
+that file. After apply, review and remove the old ignore entry, or explicitly
+run `git add -f .scaffold-guard/manifest.json`, so the manifest is tracked.
+Legacy TypeScript-only projects generated before the Python tool-carrier may
+also need `.venv/` added manually before running `uv sync`, because `.gitignore`
+is seed-owned and upgrade does not rewrite it.
+
+`upgrade` does not delete or prune files. The `orphan` action reports a formerly
+managed file that remains in place for manual review.
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| `0` | Preview completed, apply completed, or no upgrade work was needed |
+| `1` | Conflicts prevent apply |
+| `2` | Invalid configuration, unsupported version, failed migration, filesystem failure, or rollback failure |
+
 ## `publish`
 
 Validate, commit, and push a generated project through an audited path that does
@@ -185,6 +274,11 @@ current content exactly matches the content ScaffoldGuard would render. The
 generated marker identifies managed files, but the marker alone is not proof
 that default regeneration can replace the file. Use `--force` only after review
 when you intentionally want to replace managed generated files.
+
+`compile-rules` requires the active ScaffoldGuard version to match the
+project's `generated_with` metadata. After updating ScaffoldGuard, preview and
+apply `scaffold-guard upgrade` before compiling rules so structured metadata and
+managed templates advance in one reviewed transaction.
 
 ## `doctor`
 
