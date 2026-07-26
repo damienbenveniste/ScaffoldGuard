@@ -1,5 +1,5 @@
 {
-  "include": ["packages/python/src", "packages/python/tests", "packages/python/examples"],
+  "include": ["{{ python_workspace }}/src", "{{ python_workspace }}/tests", "{{ python_workspace }}/examples"],
   "exclude": ["**/__pycache__", ".venv", ".mypy_cache", ".pytest_cache", ".ruff_cache", "node_modules"],
   "pythonVersion": "{{ python_min }}",
   "typeCheckingMode": "{{ python_typecheck_mode }}",
@@ -8,7 +8,7 @@
   "executionEnvironments": [
     {
       "root": ".",
-      "extraPaths": ["packages/python/src"]
+      "extraPaths": ["{{ python_workspace }}/src"]
     }
   ],
   "reportMissingTypeStubs": "warning"

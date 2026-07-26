@@ -100,18 +100,18 @@ BASE_MONOREPO_FILES = {
     Path("biome.json"),
     Path(".gitignore"),
     Path(".github/workflows/ci.yml"),
-    Path("packages/python/examples/hello.py"),
-    Path("packages/python/src/demo/__init__.py"),
-    Path("packages/python/src/demo/core.py"),
-    Path("packages/python/src/demo/py.typed"),
-    Path("packages/python/tests/unit/test_core.py"),
-    Path("packages/python/tests/integration/test_import_package.py"),
-    Path("packages/typescript/package.json"),
-    Path("packages/typescript/tsconfig.json"),
-    Path("packages/typescript/tsconfig.build.json"),
-    Path("packages/typescript/vitest.config.ts"),
-    Path("packages/typescript/src/index.ts"),
-    Path("packages/typescript/tests/index.test.ts"),
+    Path("apps/api/examples/hello.py"),
+    Path("apps/api/src/demo/__init__.py"),
+    Path("apps/api/src/demo/core.py"),
+    Path("apps/api/src/demo/py.typed"),
+    Path("apps/api/tests/unit/test_core.py"),
+    Path("apps/api/tests/integration/test_import_package.py"),
+    Path("apps/web/package.json"),
+    Path("apps/web/tsconfig.json"),
+    Path("apps/web/tsconfig.build.json"),
+    Path("apps/web/vitest.config.ts"),
+    Path("apps/web/src/index.ts"),
+    Path("apps/web/tests/index.test.ts"),
     Path("scaffold-guard.toml"),
     MANIFEST_FILE,
 } | CODEX_ADAPTER_FILES
@@ -522,25 +522,133 @@ def test_init_can_generate_python_typescript_monorepo_profile(
     package_json = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))
     biome_json = json.loads((project_dir / "biome.json").read_text(encoding="utf-8"))
     config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
-    assert 'packages = ["packages/python/src/demo"]' in pyproject
+    assert 'packages = ["apps/api/src/demo"]' in pyproject
     _assert_json_has_no_blank_lines(project_dir / "package.json")
-    _assert_json_has_no_blank_lines(project_dir / "packages/typescript/package.json")
-    assert package_json["workspaces"] == ["packages/typescript"]
-    assert package_json["scripts"]["ts:typecheck"].startswith("tsc -p packages/typescript")
+    _assert_json_has_no_blank_lines(project_dir / "apps/web/package.json")
+    assert package_json["workspaces"] == ["apps/web"]
+    assert package_json["scripts"]["ts:typecheck"].startswith("tsc -p apps/web")
     assert package_json["devDependencies"]["@biomejs/biome"] == "^2.5.0"
     assert biome_json["files"]["includes"] == [
-        "packages/typescript/**",
-        "!packages/typescript/dist",
-        "!packages/typescript/coverage",
+        "apps/web/**",
+        "!apps/web/dist",
+        "!apps/web/coverage",
     ]
     assert biome_json["linter"]["rules"] == {"preset": "recommended"}
     assert config["project"]["profile"] == "monorepo"
+    assert config["monorepo"] == {
+        "layout": "application",
+        "python_workspace": "apps/api",
+        "typescript_workspace": "apps/web",
+    }
     assert config["features"]["python"] is True
     assert config["features"]["typescript"] is True
     assert "uv sync --all-groups" in result.output
     assert "npm install" in result.output
     _assert_no_unresolved_project_placeholders(project_dir)
     _assert_python_files_compile(project_dir)
+
+
+def test_init_can_generate_library_monorepo_layout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The library layout uses fixed core and client package workspaces."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "init",
+            "demo",
+            "--profile",
+            "monorepo",
+            "--agent",
+            "codex",
+            "--monorepo-layout",
+            "library",
+        ],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert (project_dir / "packages/core/src/demo/core.py").exists()
+    assert (project_dir / "packages/client/src/index.ts").exists()
+    assert config["monorepo"] == {
+        "layout": "library",
+        "python_workspace": "packages/core",
+        "typescript_workspace": "packages/client",
+    }
+
+
+def test_init_can_generate_custom_monorepo_layout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-interactive custom layout flags persist and relocate both workspaces."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "init",
+            "demo",
+            "--profile",
+            "monorepo",
+            "--agent",
+            "codex",
+            "--monorepo-layout",
+            "custom",
+            "--python-workspace",
+            "services/api",
+            "--typescript-workspace",
+            "frontends/web",
+        ],
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "demo"
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert (project_dir / "services/api/src/demo/core.py").exists()
+    assert (project_dir / "frontends/web/src/index.ts").exists()
+    assert config["monorepo"] == {
+        "layout": "custom",
+        "python_workspace": "services/api",
+        "typescript_workspace": "frontends/web",
+    }
+    assert "packages/python" not in (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    assert "packages/typescript" not in (project_dir / "package.json").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--profile", "python", "--monorepo-layout", "application"],
+        ["--profile", "python", "--python-workspace", "services/api"],
+        ["--profile", "monorepo", "--monorepo-layout", "custom"],
+        [
+            "--profile",
+            "monorepo",
+            "--monorepo-layout",
+            "application",
+            "--python-workspace",
+            "apps/api",
+        ],
+    ],
+)
+def test_init_rejects_invalid_monorepo_flag_combinations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+) -> None:
+    """Monorepo-only flags and layout-specific overrides fail before writes."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(app, ["init", "demo", *arguments])
+
+    assert result.exit_code != SUCCESS
+    assert "Error:" in result.output
+    assert not (tmp_path / "demo").exists()
 
 
 def test_init_monorepo_license_none_omits_python_pyproject_license_metadata(
@@ -560,7 +668,7 @@ def test_init_monorepo_license_none_omits_python_pyproject_license_metadata(
     pyproject = tomllib.loads((project_dir / "pyproject.toml").read_text(encoding="utf-8"))
     root_package_json = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))
     workspace_package_json = json.loads(
-        (project_dir / "packages/typescript/package.json").read_text(encoding="utf-8")
+        (project_dir / "apps/web/package.json").read_text(encoding="utf-8")
     )
 
     assert "license" not in pyproject["project"]
@@ -638,10 +746,10 @@ def test_init_monorepo_profile_can_disable_typescript_optional_tools(
     config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
 
     _assert_json_has_no_blank_lines(project_dir / "package.json")
-    _assert_json_has_no_blank_lines(project_dir / "packages/typescript/package.json")
+    _assert_json_has_no_blank_lines(project_dir / "apps/web/package.json")
     assert Path("biome.json") not in files
-    assert Path("packages/typescript/vitest.config.ts") not in files
-    assert Path("packages/typescript/tests/index.test.ts") not in files
+    assert Path("apps/web/vitest.config.ts") not in files
+    assert Path("apps/web/tests/index.test.ts") not in files
     assert set(package_json["scripts"]) == {"ts:typecheck", "ts:build"}
     assert set(package_json["devDependencies"]) == {"typescript"}
     assert config["tools"]["biome"] is False
@@ -973,7 +1081,7 @@ def test_init_without_name_runs_guided_setup(
     assert "typescript: TypeScript package scaffold with npm and configurable tooling" in (
         result.output
     )
-    assert "monorepo: Python + TypeScript workspaces under packages/" in result.output
+    assert "monorepo: Python + TypeScript workspaces with a configurable layout" in result.output
     assert "Created ScaffoldGuard python project: guided-demo" in result.output
 
 
@@ -988,19 +1096,50 @@ def test_init_guided_monorepo_prompts_for_language_tool_setup(
         app,
         ["init"],
         input=(
-            "guided-monorepo\ncodex\nmonorepo\nMIT\n3.13\nstrict\nstrict\n"
+            "guided-monorepo\ncodex\nmonorepo\napplication\nMIT\n3.13\nstrict\nstrict\n"
             "mypy+pyright\nstrict\nbiome\nvitest\n95\ngithub\n"
         ),
     )
 
     assert result.exit_code == SUCCESS, result.output
-    assert (tmp_path / "guided-monorepo/packages/typescript/src/index.ts").exists()
+    assert (tmp_path / "guided-monorepo/apps/web/src/index.ts").exists()
+    assert "Monorepo layout (application/library/custom) [application]" in result.output
     assert "Ruff strictness (strict/standard/off)" in result.output
     assert "Python type-check strictness (strict/standard/off)" in result.output
     assert "Python typechecker (mypy+pyright/mypy/pyright)" in result.output
     assert "TypeScript mode (strict/standard)" in result.output
     assert "TypeScript formatter/linter (biome/off)" in result.output
     assert "TypeScript test runner (vitest/off)" in result.output
+
+
+def test_init_guided_custom_monorepo_prompts_for_workspace_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Guided custom setup collects both explicit workspace paths."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        ["init"],
+        input=(
+            "guided-custom\ncodex\nmonorepo\ncustom\n\n\nMIT\n3.13\nstrict\nstrict\n"
+            "mypy+pyright\nstrict\nbiome\nvitest\n95\ngithub\n"
+        ),
+    )
+
+    assert result.exit_code == SUCCESS, result.output
+    project_dir = tmp_path / "guided-custom"
+    config = tomllib.loads((project_dir / "scaffold-guard.toml").read_text(encoding="utf-8"))
+    assert (project_dir / "services/backend/src/guided_custom/core.py").exists()
+    assert (project_dir / "clients/browser/src/index.ts").exists()
+    assert config["monorepo"] == {
+        "layout": "custom",
+        "python_workspace": "services/backend",
+        "typescript_workspace": "clients/browser",
+    }
+    assert "Python workspace directory" in result.output
+    assert "TypeScript workspace directory" in result.output
 
 
 def test_init_guided_recovers_from_invalid_prompt_answers(
@@ -1139,6 +1278,37 @@ def test_init_dry_run_creates_no_files(
     assert result.exit_code == SUCCESS, result.output
     assert "Planned ScaffoldGuard minimal project: demo" in result.output
     assert "AGENTS.md" in result.output
+    assert not (tmp_path / "demo").exists()
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_init_rejects_custom_workspace_root_file_collision_before_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    dry_run: bool,
+) -> None:
+    """CLI dry-run and init reject a workspace rooted at generated README.md."""
+    monkeypatch.chdir(tmp_path)
+    arguments = [
+        "init",
+        "demo",
+        "--profile",
+        "monorepo",
+        "--monorepo-layout",
+        "custom",
+        "--python-workspace",
+        "README.md",
+        "--typescript-workspace",
+        "clients/web",
+    ]
+    if dry_run:
+        arguments.append("--dry-run")
+
+    result = CliRunner().invoke(app, arguments)
+
+    assert result.exit_code != SUCCESS
+    assert "Generated file destinations must not overlap: README.md and " in result.output
     assert not (tmp_path / "demo").exists()
 
 

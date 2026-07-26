@@ -584,7 +584,9 @@ def test_doctor_reports_monorepo_language_directories(
     assert checks["uv-available"].ok
     assert checks["npm-available"].ok
     assert checks["python-package-directory"].ok
+    assert checks["python-package-directory"].message.endswith("apps/api/src/demo")
     assert checks["typescript-package-directory"].ok
+    assert checks["typescript-package-directory"].message.endswith("apps/web/src")
 
 
 def _stub_doctor_environment(monkeypatch: pytest.MonkeyPatch, project_dir: Path) -> None:

@@ -209,41 +209,7 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
                 message="Codex adapter selected.",
             )
         )
-    if config.profile == "python":
-        checks.append(
-            DoctorCheck(
-                id="package-import-directory",
-                ok=(root / "src" / config.package).is_dir(),
-                severity="error",
-                message=f"Package import directory: src/{config.package}",
-            )
-        )
-    if config.profile == "typescript":
-        checks.append(
-            DoctorCheck(
-                id="typescript-source-directory",
-                ok=(root / "src").is_dir(),
-                severity="error",
-                message="TypeScript source directory: src",
-            )
-        )
-    if config.profile == "monorepo":
-        checks.extend(
-            (
-                DoctorCheck(
-                    id="python-package-directory",
-                    ok=(root / "packages/python/src" / config.package).is_dir(),
-                    severity="error",
-                    message=f"Python package directory: packages/python/src/{config.package}",
-                ),
-                DoctorCheck(
-                    id="typescript-package-directory",
-                    ok=(root / "packages/typescript/src").is_dir(),
-                    severity="error",
-                    message="TypeScript package directory: packages/typescript/src",
-                ),
-            )
-        )
+    checks.extend(_profile_directory_checks(root, config))
     if config.claude:
         checks.append(
             DoctorCheck(
@@ -281,6 +247,69 @@ def _generated_project_checks(root: Path) -> tuple[DoctorCheck, ...]:
             )
         )
     return tuple(checks)
+
+
+def _profile_directory_checks(
+    root: Path,
+    config: GeneratedProjectConfig,
+) -> tuple[DoctorCheck, ...]:
+    """Return source-directory diagnostics for the configured profile."""
+    if config.profile == "python":
+        return (
+            DoctorCheck(
+                id="package-import-directory",
+                ok=(root / "src" / config.package).is_dir(),
+                severity="error",
+                message=f"Package import directory: src/{config.package}",
+            ),
+        )
+    if config.profile == "typescript":
+        return (
+            DoctorCheck(
+                id="typescript-source-directory",
+                ok=(root / "src").is_dir(),
+                severity="error",
+                message="TypeScript source directory: src",
+            ),
+        )
+    if (
+        config.profile == "monorepo"
+        and config.python_workspace is not None
+        and config.typescript_workspace is not None
+    ):
+        return _monorepo_workspace_checks(
+            root,
+            package=config.package,
+            python_workspace=config.python_workspace.path,
+            typescript_workspace=config.typescript_workspace.path,
+        )
+    return ()
+
+
+def _monorepo_workspace_checks(
+    root: Path,
+    *,
+    package: str,
+    python_workspace: Path,
+    typescript_workspace: Path,
+) -> tuple[DoctorCheck, DoctorCheck]:
+    """Return diagnostics for configured monorepo language workspaces."""
+    python_package = python_workspace / "src" / package
+    typescript_source = typescript_workspace / "src"
+    return (
+        DoctorCheck(
+            id="python-package-directory",
+            ok=(root / python_package).is_dir(),
+            severity="error",
+            message=f"Python package directory: {python_package.as_posix()}",
+        ),
+        DoctorCheck(
+            id="typescript-package-directory",
+            ok=(root / typescript_source).is_dir(),
+            severity="error",
+            message=f"TypeScript package directory: {typescript_source.as_posix()}",
+        ),
+    )
 
 
 def _manifest_checks(root: Path, config: GeneratedProjectConfig) -> tuple[DoctorCheck, ...]:

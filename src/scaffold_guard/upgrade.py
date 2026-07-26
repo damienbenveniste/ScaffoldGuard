@@ -851,6 +851,9 @@ def _structured_migrations(
             config.root,
             generated_with=__version__,
             minimum_version=GENERATED_PROJECT_MINIMUM_VERSION,
+            monorepo_layout=config.monorepo_layout,
+            python_workspace=config.python_workspace,
+            typescript_workspace=config.typescript_workspace,
         )
         if metadata is not None:
             migrations.append(metadata)
@@ -1214,6 +1217,9 @@ def _config_init_options(
         biome_enabled=config.biome,
         vitest_enabled=config.vitest,
         adapter_selection=config.adapters,
+        monorepo_layout=config.monorepo_layout,
+        python_workspace=config.python_workspace,
+        typescript_workspace=config.typescript_workspace,
     )
 
 

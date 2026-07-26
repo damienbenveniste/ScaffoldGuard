@@ -30,13 +30,13 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/python/src/{{ package_name }}"]
+packages = ["{{ python_workspace }}/src/{{ package_name }}"]
 
 {% if use_ruff %}
 [tool.ruff]
 target-version = "{{ ruff_target_version }}"
 line-length = 100
-src = ["packages/python/src", "packages/python/tests", "packages/python/examples"]
+src = ["{{ python_workspace }}/src", "{{ python_workspace }}/tests", "{{ python_workspace }}/examples"]
 
 [tool.ruff.lint]
 select = [
@@ -83,7 +83,7 @@ max-statements = 60
 
 {% endif %}
 [tool.ruff.lint.per-file-ignores]
-"packages/python/tests/**/*.py" = ["S101"]
+"{{ python_workspace }}/tests/**/*.py" = ["S101"]
 {% endif %}
 
 {% if use_mypy %}
@@ -102,8 +102,8 @@ show_error_codes = true
 
 [tool.pytest.ini_options]
 minversion = "8.4"
-testpaths = ["packages/python/tests"]
-pythonpath = ["packages/python/src"]
+testpaths = ["{{ python_workspace }}/tests"]
+pythonpath = ["{{ python_workspace }}/src"]
 addopts = [
     "--strict-config",
     "--strict-markers",

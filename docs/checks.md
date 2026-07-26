@@ -41,7 +41,12 @@ Verifies the expected generated project structure exists for the selected
 profile. Python-profile projects require Python source, tests, docs, CI, and
 `pyrightconfig.json` when Pyright is enabled. TypeScript projects require
 `package.json`, TypeScript config, Biome config, source, tests, and CI.
-Monorepos require both `packages/python/` and `packages/typescript/`.
+Monorepos require both exact workspace paths recorded in the `[monorepo]`
+section of `scaffold-guard.toml`: `apps/api` plus `apps/web` for application
+layouts, `packages/core` plus `packages/client` for library layouts, or the two
+validated relative paths selected for a custom layout. Upgraded v0.2
+monorepos retain the internal legacy paths `packages/python` and
+`packages/typescript`.
 
 ### generated-files
 
@@ -55,7 +60,9 @@ toolchain.
 Compares `scaffold-guard.toml` against generated files and package configuration.
 It detects agent adapter mismatches, including missing Codex `.codex` files,
 Python version mismatches, coverage mismatches, and stale lockfiles when a
-lockfile exists.
+lockfile exists. For monorepos, it also validates that the recorded layout and
+workspace paths agree and that generated package configuration uses those exact
+paths.
 
 ## JSON Output
 

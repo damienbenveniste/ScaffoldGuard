@@ -9,6 +9,7 @@ from scaffold_guard.migrations import (
     plan_dependency_floor_migration,
     plan_project_metadata_migration,
 )
+from scaffold_guard.models import WorkspacePath
 
 
 def test_project_metadata_migration_preserves_existing_comments(tmp_path: Path) -> None:
@@ -49,6 +50,159 @@ def test_project_metadata_migration_is_idempotent(tmp_path: Path) -> None:
     )
 
     assert change is None
+
+
+def test_project_metadata_migration_records_legacy_monorepo_paths(
+    tmp_path: Path,
+) -> None:
+    """A v0.2 monorepo records its existing seed paths without moving them."""
+    (tmp_path / "scaffold-guard.toml").write_text(
+        '# keep this comment\n[project]\nname = "demo"\nprofile = "monorepo"\n',
+        encoding="utf-8",
+    )
+
+    change = plan_project_metadata_migration(
+        tmp_path,
+        generated_with="0.3.0",
+        minimum_version="0.3.0",
+        monorepo_layout="legacy",
+        python_workspace=WorkspacePath.parse(
+            "packages/python",
+            field_name="python_workspace",
+        ),
+        typescript_workspace=WorkspacePath.parse(
+            "packages/typescript",
+            field_name="typescript_workspace",
+        ),
+    )
+
+    assert change is not None
+    assert "# keep this comment" in change.content
+    assert '[monorepo]\nlayout = "legacy"' in change.content
+    assert 'python_workspace = "packages/python"' in change.content
+    assert 'typescript_workspace = "packages/typescript"' in change.content
+
+
+def test_project_metadata_migration_preserves_explicit_monorepo_layout(
+    tmp_path: Path,
+) -> None:
+    """An explicit current layout remains byte-identical when metadata is current."""
+    path = tmp_path / "scaffold-guard.toml"
+    content = (
+        '[project]\nname = "demo"\nprofile = "monorepo"\n\n'
+        "[monorepo]\n"
+        'layout = "application"\n'
+        'python_workspace = "apps/api"\n'
+        'typescript_workspace = "apps/web"\n\n'
+        "[scaffold_guard]\n"
+        "format_version = 1\n"
+        'generated_with = "0.3.0"\n'
+        'requires_scaffold_guard = ">=0.3.0"\n'
+    )
+    path.write_text(content, encoding="utf-8")
+
+    change = plan_project_metadata_migration(
+        tmp_path,
+        generated_with="0.3.0",
+        minimum_version="0.3.0",
+        monorepo_layout="application",
+        python_workspace=WorkspacePath.parse("apps/api", field_name="python_workspace"),
+        typescript_workspace=WorkspacePath.parse(
+            "apps/web",
+            field_name="typescript_workspace",
+        ),
+    )
+
+    assert change is None
+
+
+def test_project_metadata_migration_rejects_monorepo_table_for_python_profile(
+    tmp_path: Path,
+) -> None:
+    """A non-monorepo migration cannot silently retain monorepo metadata."""
+    (tmp_path / "scaffold-guard.toml").write_text(
+        '[project]\nname = "demo"\n\n[monorepo]\nlayout = "custom"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(MigrationError, match="only valid for monorepo"):
+        plan_project_metadata_migration(
+            tmp_path,
+            generated_with="0.3.0",
+            minimum_version="0.3.0",
+        )
+
+
+def test_project_metadata_migration_requires_both_monorepo_paths(tmp_path: Path) -> None:
+    """A partial monorepo migration input is rejected before writing metadata."""
+    (tmp_path / "scaffold-guard.toml").write_text(
+        '[project]\nname = "demo"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(MigrationError, match="requires both workspace paths"):
+        plan_project_metadata_migration(
+            tmp_path,
+            generated_with="0.3.0",
+            minimum_version="0.3.0",
+            monorepo_layout="legacy",
+            python_workspace=WorkspacePath.parse(
+                "packages/python",
+                field_name="python_workspace",
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("config_toml", "message"),
+    [
+        ('monorepo = "invalid"\n\n[project]\nname = "demo"\n', "must be a table"),
+        ('[project]\nname = "demo"\n\n[monorepo]\n', "must not be empty"),
+        (
+            '[project]\nname = "demo"\n\n[monorepo]\nlayout = "legacy"\n'
+            'python_workspace = "packages/python"\n'
+            'typescript_workspace = "packages/typescript"\n'
+            'owner = "custom"\n',
+            "unsupported key: owner",
+        ),
+    ],
+)
+def test_project_metadata_migration_rejects_ambiguous_monorepo_table(
+    tmp_path: Path,
+    config_toml: str,
+    message: str,
+) -> None:
+    """Malformed or extended monorepo metadata requires manual resolution."""
+    (tmp_path / "scaffold-guard.toml").write_text(
+        config_toml,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(MigrationError, match=message):
+        plan_project_metadata_migration(
+            tmp_path,
+            generated_with="0.3.0",
+            minimum_version="0.3.0",
+            monorepo_layout="legacy",
+            python_workspace=WorkspacePath.parse(
+                "packages/python",
+                field_name="python_workspace",
+            ),
+            typescript_workspace=WorkspacePath.parse(
+                "packages/typescript",
+                field_name="typescript_workspace",
+            ),
+        )
+
+
+def test_project_metadata_migration_requires_config_file(tmp_path: Path) -> None:
+    """Structured metadata migration fails clearly when config is absent."""
+    with pytest.raises(MigrationError, match="Generated project config is missing"):
+        plan_project_metadata_migration(
+            tmp_path,
+            generated_with="0.3.0",
+            minimum_version="0.3.0",
+        )
 
 
 def test_project_metadata_migration_rejects_unknown_reserved_key(tmp_path: Path) -> None:

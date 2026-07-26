@@ -37,15 +37,15 @@ jobs:
 
 {% if use_ruff %}
       - name: Check Python formatting
-        run: uv run ruff format --check packages/python
+        run: uv run ruff format --check {{ python_workspace }}
 
       - name: Lint Python
-        run: uv run ruff check packages/python
+        run: uv run ruff check {{ python_workspace }}
 
 {% endif %}
 {% if use_mypy %}
       - name: Type check Python with mypy
-        run: uv run mypy packages/python/src packages/python/tests packages/python/examples
+        run: uv run mypy {{ python_workspace }}/src {{ python_workspace }}/tests {{ python_workspace }}/examples
 
 {% endif %}
 {% if use_pyright %}
@@ -55,7 +55,7 @@ jobs:
 {% endif %}
       - name: Test Python
         run: >
-          uv run pytest packages/python/tests
+          uv run pytest {{ python_workspace }}/tests
           --cov={{ package_name }}
           --cov-report=term-missing
           --cov-fail-under={{ coverage }}

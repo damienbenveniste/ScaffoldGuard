@@ -3,12 +3,30 @@ set -euo pipefail
 
 profile="${1:?profile is required}"
 wheelhouse="${2:?wheelhouse is required}"
+monorepo_layout="${3:-none}"
 python_version="${SMOKE_PYTHON_VERSION:-3.13}"
 
 case "${profile}" in
   minimal | python | typescript | monorepo) ;;
   *)
     printf 'Unsupported profile: %s\n' "${profile}" >&2
+    exit 2
+    ;;
+esac
+
+if [[ "${profile}" == "monorepo" && "${monorepo_layout}" == "none" ]]; then
+  monorepo_layout="application"
+fi
+
+if [[ "${profile}" != "monorepo" && "${monorepo_layout}" != "none" ]]; then
+  printf 'Monorepo layout requires the monorepo profile: %s\n' "${monorepo_layout}" >&2
+  exit 2
+fi
+
+case "${monorepo_layout}" in
+  none | application | library | custom) ;;
+  *)
+    printf 'Unsupported monorepo layout: %s\n' "${monorepo_layout}" >&2
     exit 2
     ;;
 esac
@@ -23,7 +41,8 @@ wheel_file="$(cd "$(dirname "${wheel_file}")" && pwd)/$(basename "${wheel_file}"
 wheelhouse="$(cd "${wheelhouse}" && pwd)"
 
 uv tool install "${wheel_file}" --python "${python_version}" --force
-export PATH="${HOME}/.local/bin:${PATH}"
+tool_bin_dir="${UV_TOOL_BIN_DIR:-${HOME}/.local/bin}"
+export PATH="${tool_bin_dir}:${PATH}"
 
 global_version="$(scaffold-guard version)"
 printf 'Global ScaffoldGuard under test: %s\n' "${global_version}"
@@ -33,8 +52,40 @@ trap 'rm -rf "${workdir}"' EXIT
 
 project_name="smoke-${profile}"
 cd "${workdir}"
-scaffold-guard init "${project_name}" --profile "${profile}" --agent all --ci github
+init_args=(
+  "${project_name}"
+  --profile "${profile}"
+  --agent all
+  --ci github
+)
+if [[ "${profile}" == "monorepo" ]]; then
+  init_args+=(--monorepo-layout "${monorepo_layout}")
+  if [[ "${monorepo_layout}" == "custom" ]]; then
+    init_args+=(
+      --python-workspace services/backend
+      --typescript-workspace clients/browser
+    )
+  fi
+fi
+scaffold-guard init "${init_args[@]}"
 cd "${workdir}/${project_name}"
+
+if [[ "${profile}" == "monorepo" ]]; then
+  case "${monorepo_layout}" in
+    application)
+      expected_python_workspace="apps/api"
+      expected_typescript_workspace="apps/web"
+      ;;
+    library)
+      expected_python_workspace="packages/core"
+      expected_typescript_workspace="packages/client"
+      ;;
+    custom)
+      expected_python_workspace="services/backend"
+      expected_typescript_workspace="clients/browser"
+      ;;
+  esac
+fi
 
 export UV_FIND_LINKS="${wheelhouse}${UV_FIND_LINKS:+ ${UV_FIND_LINKS}}"
 
@@ -43,6 +94,32 @@ if [[ "${profile}" == "typescript" || "${profile}" == "monorepo" ]]; then
 fi
 
 uv sync
+if [[ "${profile}" == "monorepo" ]]; then
+  .venv/bin/python - \
+    "${monorepo_layout}" \
+    "${expected_python_workspace}" \
+    "${expected_typescript_workspace}" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+layout, python_workspace, typescript_workspace = sys.argv[1:]
+with Path("scaffold-guard.toml").open("rb") as handle:
+    config = tomllib.load(handle)
+
+expected = {
+    "layout": layout,
+    "python_workspace": python_workspace,
+    "typescript_workspace": typescript_workspace,
+}
+actual = config.get("monorepo")
+if actual != expected:
+    raise SystemExit(f"Expected [monorepo] config {expected}, got {actual}")
+for workspace in (python_workspace, typescript_workspace):
+    if not Path(workspace).is_dir():
+        raise SystemExit(f"Expected generated monorepo workspace directory: {workspace}")
+PY
+fi
 uv pip install --python .venv/bin/python --reinstall --no-deps "${wheel_file}"
 
 local_version="$(uv run --no-sync scaffold-guard version)"

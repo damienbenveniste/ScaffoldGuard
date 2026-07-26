@@ -31,27 +31,27 @@ prefix_rule(
 {% if use_python %}
 {% if use_ruff %}
 prefix_rule(
-    pattern = ["uv", "run", "ruff", "format", "--check", "{% if profile == "monorepo" %}packages/python{% else %}.{% endif %}"],
+    pattern = ["uv", "run", "ruff", "format", "--check", "{% if profile == "monorepo" %}{{ python_workspace }}{% else %}.{% endif %}"],
     decision = "allow",
     justification = "Ruff format checks are expected read-only validation.",
-    match = ["uv run ruff format --check {% if profile == "monorepo" %}packages/python{% else %}.{% endif %}"],
+    match = ["uv run ruff format --check {% if profile == "monorepo" %}{{ python_workspace }}{% else %}.{% endif %}"],
 )
 
 prefix_rule(
-    pattern = ["uv", "run", "ruff", "check", "{% if profile == "monorepo" %}packages/python{% else %}.{% endif %}"],
+    pattern = ["uv", "run", "ruff", "check", "{% if profile == "monorepo" %}{{ python_workspace }}{% else %}.{% endif %}"],
     decision = "allow",
     justification = "Ruff lint checks are expected validation.",
-    match = ["uv run ruff check {% if profile == "monorepo" %}packages/python{% else %}.{% endif %}"],
-    not_match = ["uv run ruff check --fix {% if profile == "monorepo" %}packages/python{% else %}.{% endif %}"],
+    match = ["uv run ruff check {% if profile == "monorepo" %}{{ python_workspace }}{% else %}.{% endif %}"],
+    not_match = ["uv run ruff check --fix {% if profile == "monorepo" %}{{ python_workspace }}{% else %}.{% endif %}"],
 )
 
 {% endif %}
 {% if use_mypy %}
 prefix_rule(
-    pattern = ["uv", "run", "mypy", {% if profile == "monorepo" %}"packages/python/src"{% else %}"src"{% endif %}],
+    pattern = ["uv", "run", "mypy", {% if profile == "monorepo" %}"{{ python_workspace }}/src"{% else %}"src"{% endif %}],
     decision = "allow",
     justification = "mypy checks are expected validation.",
-    match = ["uv run mypy {% if profile == "monorepo" %}packages/python/src packages/python/tests packages/python/examples{% else %}src tests examples{% endif %}"],
+    match = ["uv run mypy {% if profile == "monorepo" %}{{ python_workspace }}/src {{ python_workspace }}/tests {{ python_workspace }}/examples{% else %}src tests examples{% endif %}"],
 )
 
 {% endif %}
@@ -65,10 +65,10 @@ prefix_rule(
 
 {% endif %}
 prefix_rule(
-    pattern = ["uv", "run", "pytest", {% if profile == "monorepo" %}"packages/python/tests"{% else %}"tests"{% endif %}],
+    pattern = ["uv", "run", "pytest", {% if profile == "monorepo" %}"{{ python_workspace }}/tests"{% else %}"tests"{% endif %}],
     decision = "allow",
     justification = "pytest commands under the generated test directory are expected validation.",
-    match = ["uv run pytest {% if profile == "monorepo" %}packages/python/tests{% else %}tests{% endif %}"],
+    match = ["uv run pytest {% if profile == "monorepo" %}{{ python_workspace }}/tests{% else %}tests{% endif %}"],
 )
 
 {% if docs_enabled == "true" %}

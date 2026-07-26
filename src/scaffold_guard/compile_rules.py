@@ -152,6 +152,9 @@ def _config_init_options(
         biome_enabled=config.biome,
         vitest_enabled=config.vitest,
         adapter_selection=adapters,
+        monorepo_layout=config.monorepo_layout,
+        python_workspace=config.python_workspace,
+        typescript_workspace=config.typescript_workspace,
     )
 
 

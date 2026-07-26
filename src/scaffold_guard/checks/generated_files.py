@@ -1,9 +1,10 @@
 """Checks for generated file content."""
 
+import importlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
 from scaffold_guard.checks.config import (
@@ -13,6 +14,7 @@ from scaffold_guard.checks.config import (
     tool_enabled,
 )
 from scaffold_guard.checks.files import iter_text_files, read_lines, relative_to_root
+from scaffold_guard.models import ProfileChoice, WorkspacePath
 
 AGENT_FILE_PATHS: tuple[Path, ...] = (
     Path("AGENTS.md"),
@@ -39,15 +41,51 @@ MONOREPO_CI_TOKENS: tuple[str, ...] = (
 )
 
 
+class _GeneratedProjectConfig(Protocol):
+    """Generated config fields needed for path-aware file checks."""
+
+    profile: ProfileChoice
+    python_workspace: WorkspacePath | None
+    typescript_workspace: WorkspacePath | None
+
+
+class _ProjectConfigModule(Protocol):
+    """Deferred project config loader used without creating an import cycle."""
+
+    def load_generated_project_config(self, root: Path) -> _GeneratedProjectConfig:
+        """Load generated project config."""
+        ...
+
+
 def check_generated_files(root: Path) -> CheckResult:
     """Verify generated files do not contain unresolved template or format issues."""
+    config_available, python_workspace, typescript_workspace = _configured_workspace_paths(root)
     findings: list[CheckFinding] = []
     findings.extend(_check_unresolved_agent_placeholders(root))
     findings.extend(_check_codex_rules(root))
     findings.extend(_check_codex_hooks(root))
     findings.extend(_check_cursor_frontmatter(root))
-    findings.extend(_check_readme_mentions_uv(root))
-    findings.extend(_check_ci_workflow(root))
+    if not config_available:
+        return CheckResult(id="generated-files", findings=tuple(findings))
+    findings.extend(
+        _check_readme_mentions_uv(
+            root,
+            python_workspace=python_workspace,
+            typescript_workspace=typescript_workspace,
+        )
+    )
+    findings.extend(
+        _check_ci_workflow(
+            root,
+            python_workspace=python_workspace,
+        )
+    )
+    findings.extend(
+        _check_monorepo_package_json_workspace(
+            root,
+            typescript_workspace=typescript_workspace,
+        )
+    )
     return CheckResult(id="generated-files", findings=tuple(findings))
 
 
@@ -210,14 +248,44 @@ def _check_cursor_frontmatter(root: Path) -> list[CheckFinding]:
     return findings
 
 
-def _check_readme_mentions_uv(root: Path) -> list[CheckFinding]:
+def _configured_workspace_paths(
+    root: Path,
+) -> tuple[bool, Path | None, Path | None]:
+    """Return whether config loaded and any configured monorepo workspaces."""
+    project_config = cast(
+        "_ProjectConfigModule",
+        importlib.import_module("scaffold_guard.project_config"),
+    )
+    try:
+        config = project_config.load_generated_project_config(root)
+    except ValueError:
+        return False, None, None
+    if config.profile != "monorepo":
+        return True, None, None
+    return (
+        True,
+        config.python_workspace.path if config.python_workspace is not None else None,
+        config.typescript_workspace.path if config.typescript_workspace is not None else None,
+    )
+
+
+def _check_readme_mentions_uv(
+    root: Path,
+    *,
+    python_workspace: Path | None,
+    typescript_workspace: Path | None,
+) -> list[CheckFinding]:
     """Verify generated README commands point users to the configured toolchain."""
     readme_path = root / "README.md"
     if not readme_path.exists():
         return []
     content = readme_path.read_text(encoding="utf-8", errors="replace")
     profile = project_profile(root)
-    expected_tokens = _readme_tool_tokens(profile)
+    expected_tokens = _readme_tool_tokens(
+        profile,
+        python_workspace=python_workspace,
+        typescript_workspace=typescript_workspace,
+    )
     missing_tokens = tuple(token for token in expected_tokens if token not in content)
     if not missing_tokens:
         return []
@@ -231,12 +299,19 @@ def _check_readme_mentions_uv(root: Path) -> list[CheckFinding]:
     ]
 
 
-def _check_ci_workflow(root: Path) -> list[CheckFinding]:
+def _check_ci_workflow(
+    root: Path,
+    *,
+    python_workspace: Path | None,
+) -> list[CheckFinding]:
     """Verify generated CI includes the V1 toolchain commands."""
     workflow_paths = _ci_workflow_paths(root)
     if not workflow_paths:
         return []
-    expected_tokens = _ci_tokens(root)
+    expected_tokens = _ci_tokens(
+        root,
+        python_workspace=python_workspace,
+    )
     findings: list[CheckFinding] = []
     for relative_path in workflow_paths:
         workflow_path = root / relative_path
@@ -254,6 +329,45 @@ def _check_ci_workflow(root: Path) -> list[CheckFinding]:
             if token not in content
         )
     return findings
+
+
+def _check_monorepo_package_json_workspace(
+    root: Path,
+    *,
+    typescript_workspace: Path | None,
+) -> list[CheckFinding]:
+    """Verify the root package metadata targets the configured TypeScript workspace."""
+    if typescript_workspace is None:
+        return []
+    package_json = root / "package.json"
+    if not package_json.exists():
+        return []
+    workspace = typescript_workspace.as_posix()
+    try:
+        payload: object = json.loads(package_json.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return [
+            finding(
+                "package.json",
+                line=1,
+                code="package-json-invalid",
+                message="Generated package.json must contain valid JSON.",
+            )
+        ]
+    package_config: Mapping[str, object] = (
+        cast("Mapping[str, object]", payload) if isinstance(payload, Mapping) else {}
+    )
+    workspaces = package_config.get("workspaces")
+    if isinstance(workspaces, list) and cast("list[object]", workspaces) == [workspace]:
+        return []
+    return [
+        finding(
+            "package.json",
+            line=1,
+            code="package-json-missing-workspace-path",
+            message=f"Generated package.json must reference {workspace}.",
+        )
+    ]
 
 
 def _ci_workflow_paths(root: Path) -> tuple[Path, ...]:
@@ -278,7 +392,11 @@ def _package_ci_tokens(root: Path) -> tuple[str, ...]:
     return tuple(tokens)
 
 
-def _ci_tokens(root: Path) -> tuple[str, ...]:
+def _ci_tokens(
+    root: Path,
+    *,
+    python_workspace: Path | None,
+) -> tuple[str, ...]:
     """Return required CI tokens for the configured project profile."""
     profile = project_profile(root)
     if profile == "minimal":
@@ -286,7 +404,10 @@ def _ci_tokens(root: Path) -> tuple[str, ...]:
     if profile == "typescript":
         return _typescript_ci_tokens(root)
     if profile == "monorepo":
-        return _monorepo_ci_tokens(root)
+        return _monorepo_ci_tokens(
+            root,
+            python_workspace=python_workspace,
+        )
     return _package_ci_tokens(root)
 
 
@@ -300,9 +421,15 @@ def _typescript_ci_tokens(root: Path) -> tuple[str, ...]:
     return tuple(tokens)
 
 
-def _monorepo_ci_tokens(root: Path) -> tuple[str, ...]:
+def _monorepo_ci_tokens(
+    root: Path,
+    *,
+    python_workspace: Path | None,
+) -> tuple[str, ...]:
     """Return required monorepo CI tokens for the configured toolchains."""
     tokens: list[str] = list(MONOREPO_CI_TOKENS)
+    if python_workspace is not None:
+        tokens.append(python_workspace.as_posix())
     if tool_enabled(root, "ruff"):
         tokens.append("ruff")
     if tool_enabled(root, "mypy"):
@@ -316,12 +443,22 @@ def _monorepo_ci_tokens(root: Path) -> tuple[str, ...]:
     return tuple(tokens)
 
 
-def _readme_tool_tokens(profile: str) -> tuple[str, ...]:
+def _readme_tool_tokens(
+    profile: str,
+    *,
+    python_workspace: Path | None,
+    typescript_workspace: Path | None,
+) -> tuple[str, ...]:
     """Return README command tokens required for the generated project profile."""
     if profile == "typescript":
         return ("npm ",)
     if profile == "monorepo":
-        return ("uv ", "npm ")
+        workspace_tokens = tuple(
+            workspace.as_posix()
+            for workspace in (python_workspace, typescript_workspace)
+            if workspace is not None
+        )
+        return ("uv ", "npm ", *workspace_tokens)
     if profile == "minimal":
         return ("scaffold-guard ",)
     return ("uv ",)

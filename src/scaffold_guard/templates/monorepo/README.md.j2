@@ -16,16 +16,16 @@ scaffold-guard validate
 
 ```bash
 {% if use_ruff %}
-uv run ruff format --check packages/python
-uv run ruff check packages/python
+uv run ruff format --check {{ python_workspace }}
+uv run ruff check {{ python_workspace }}
 {% endif %}
 {% if use_mypy %}
-uv run mypy packages/python/src packages/python/tests packages/python/examples
+uv run mypy {{ python_workspace }}/src {{ python_workspace }}/tests {{ python_workspace }}/examples
 {% endif %}
 {% if use_pyright %}
 uv run pyright
 {% endif %}
-uv run pytest packages/python/tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}
+uv run pytest {{ python_workspace }}/tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}
 ```
 
 ## TypeScript Commands
@@ -47,6 +47,6 @@ npm run ts:coverage
 
 ## Project Layout
 
-- `packages/python/` contains Python package source, tests, and examples.
-- `packages/typescript/` contains TypeScript package source{% if use_vitest %} and tests{% endif %}.
+- `{{ python_workspace }}/` contains Python package source, tests, and examples.
+- `{{ typescript_workspace }}/` contains TypeScript package source{% if use_vitest %} and tests{% endif %}.
 - `AGENTS.md` contains shared coding-agent instructions.

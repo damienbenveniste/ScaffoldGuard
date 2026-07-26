@@ -22,6 +22,7 @@ from scaffold_guard.scaffold import (
     build_init_options,
     normalize_project_name,
     scaffold_package_project,
+    with_monorepo_layout,
     with_quality_tools,
 )
 from scaffold_guard.upgrade import UpgradeError, UpgradeResult, run_upgrade
@@ -44,6 +45,14 @@ class ProfileOption(StrEnum):
     PYTHON = "python"
     TYPESCRIPT = "typescript"
     MONOREPO = "monorepo"
+
+
+class MonorepoLayoutOption(StrEnum):
+    """Supported generated monorepo directory layouts."""
+
+    APPLICATION = "application"
+    LIBRARY = "library"
+    CUSTOM = "custom"
 
 
 class LicenseOption(StrEnum):
@@ -113,6 +122,9 @@ class PromptedInitOptions:
     name: str
     agent: AgentOption
     profile: ProfileOption
+    monorepo_layout: MonorepoLayoutOption | None
+    python_workspace: str | None
+    typescript_workspace: str | None
     license_name: LicenseOption
     python_min: str
     coverage: int
@@ -135,6 +147,9 @@ class InitPromptDefaults:
     name: str | None
     agent: AgentOption
     profile: ProfileOption
+    monorepo_layout: MonorepoLayoutOption | None
+    python_workspace: str | None
+    typescript_workspace: str | None
     license_name: LicenseOption
     python_min: str
     coverage: int
@@ -154,12 +169,15 @@ PROFILE_DESCRIPTIONS: tuple[tuple[str, str], ...] = (
     ("minimal", "guardrails only; no Python or TypeScript source scaffold"),
     ("python", "Python package scaffold with src/, tests/, docs/, and uv"),
     ("typescript", "TypeScript package scaffold with npm and configurable tooling"),
-    ("monorepo", "Python + TypeScript workspaces under packages/"),
+    ("monorepo", "Python + TypeScript workspaces with a configurable layout"),
 )
 PROFILE_CHOICES: tuple[str, ...] = tuple(option.value for option in ProfileOption)
 INIT_OPTION_PARAMETER_NAMES: tuple[str, ...] = (
     "agent",
     "profile",
+    "monorepo_layout",
+    "python_workspace",
+    "typescript_workspace",
     "license_name",
     "python_min",
     "coverage",
@@ -396,6 +414,26 @@ def _prompt_init_options(defaults: InitPromptDefaults) -> PromptedInitOptions:
             default=defaults.profile.value,
         )
     )
+    prompted_monorepo_layout = defaults.monorepo_layout
+    prompted_python_workspace = defaults.python_workspace
+    prompted_typescript_workspace = defaults.typescript_workspace
+    if prompted_profile == ProfileOption.MONOREPO:
+        prompted_monorepo_layout = MonorepoLayoutOption(
+            _prompt_choice(
+                "Monorepo layout",
+                choices=tuple(option.value for option in MonorepoLayoutOption),
+                default=(defaults.monorepo_layout or MonorepoLayoutOption.APPLICATION).value,
+            )
+        )
+        if prompted_monorepo_layout == MonorepoLayoutOption.CUSTOM:
+            prompted_python_workspace = _prompt_text(
+                "Python workspace directory",
+                default=defaults.python_workspace or "services/backend",
+            )
+            prompted_typescript_workspace = _prompt_text(
+                "TypeScript workspace directory",
+                default=defaults.typescript_workspace or "clients/browser",
+            )
     prompted_license = LicenseOption(
         _prompt_choice(
             "License",
@@ -481,6 +519,9 @@ def _prompt_init_options(defaults: InitPromptDefaults) -> PromptedInitOptions:
         name=prompted_name,
         agent=prompted_agent,
         profile=prompted_profile,
+        monorepo_layout=prompted_monorepo_layout,
+        python_workspace=prompted_python_workspace,
+        typescript_workspace=prompted_typescript_workspace,
         license_name=prompted_license,
         python_min=prompted_python_min,
         coverage=prompted_coverage,
@@ -655,6 +696,27 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
             ),
         ),
     ] = ProfileOption.MINIMAL.value,
+    monorepo_layout: Annotated[
+        MonorepoLayoutOption | None,
+        typer.Option(
+            "--monorepo-layout",
+            help="Monorepo directory layout: application, library, or custom.",
+        ),
+    ] = None,
+    python_workspace: Annotated[
+        str | None,
+        typer.Option(
+            "--python-workspace",
+            help="Custom monorepo Python workspace directory.",
+        ),
+    ] = None,
+    typescript_workspace: Annotated[
+        str | None,
+        typer.Option(
+            "--typescript-workspace",
+            help="Custom monorepo TypeScript workspace directory.",
+        ),
+    ] = None,
     license_name: Annotated[
         LicenseOption,
         typer.Option("--license", help="Generated project license."),
@@ -715,6 +777,9 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
                 name=name,
                 agent=agent,
                 profile=profile_option,
+                monorepo_layout=monorepo_layout,
+                python_workspace=python_workspace,
+                typescript_workspace=typescript_workspace,
                 license_name=license_name,
                 python_min=python_min,
                 coverage=coverage,
@@ -730,6 +795,9 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
         name = prompted_options.name
         agent = prompted_options.agent
         profile_option = prompted_options.profile
+        monorepo_layout = prompted_options.monorepo_layout
+        python_workspace = prompted_options.python_workspace
+        typescript_workspace = prompted_options.typescript_workspace
         license_name = prompted_options.license_name
         python_min = prompted_options.python_min
         coverage = prompted_options.coverage
@@ -766,6 +834,12 @@ def init_command(  # noqa: PLR0913 - Typer exposes one parameter per public CLI 
             ci=ci.value,
             dry_run=dry_run,
             force=force,
+        )
+        options = with_monorepo_layout(
+            options,
+            layout=None if monorepo_layout is None else monorepo_layout.value,
+            python_workspace=python_workspace,
+            typescript_workspace=typescript_workspace,
         )
         options = with_quality_tools(
             options,

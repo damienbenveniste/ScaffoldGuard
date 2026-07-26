@@ -40,7 +40,9 @@ the shared source of truth.
 
 Language-specific Claude rules follow the selected profile: Python rules are
 included for `python` and `monorepo`, and TypeScript rules are included for
-`typescript` and `monorepo`.
+`typescript` and `monorepo`. In monorepos, path-oriented rules use the exact
+Python and TypeScript workspaces recorded in `scaffold-guard.toml`, whether the
+layout is application, library, custom, or an upgraded internal legacy layout.
 
 Claude git hygiene guidance points to the same repo-local
 `uv run scaffold-guard publish` path for intentional commits and pushes.
@@ -55,7 +57,8 @@ Each `.mdc` file includes frontmatter with metadata such as `description`,
 `alwaysApply`, and `globs` where appropriate.
 
 Language-specific Cursor rules follow the selected profile in the same way as
-Claude rules.
+Claude rules. Monorepo rule globs use the exact recorded workspace paths rather
+than assuming fixed `packages/python` and `packages/typescript` directories.
 
 Cursor git hygiene guidance points to the same repo-local
 `uv run scaffold-guard publish` path for intentional commits and pushes.

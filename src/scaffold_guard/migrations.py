@@ -9,9 +9,13 @@ import tomlkit
 from packaging.requirements import InvalidRequirement, Requirement
 from tomlkit.items import Array, InlineTable, Table
 
+from scaffold_guard.models import MonorepoLayout, WorkspacePath
 from scaffold_guard.versions import PROJECT_FORMAT_VERSION, PROJECT_METADATA_KEYS
 
 MigrationKind = Literal["create", "migrate"]
+MONOREPO_METADATA_KEYS: frozenset[str] = frozenset(
+    ("layout", "python_workspace", "typescript_workspace")
+)
 
 
 class _TableReader(Protocol):
@@ -41,8 +45,11 @@ def plan_project_metadata_migration(
     *,
     generated_with: str,
     minimum_version: str,
+    monorepo_layout: MonorepoLayout | None = None,
+    python_workspace: WorkspacePath | None = None,
+    typescript_workspace: WorkspacePath | None = None,
 ) -> StructuredFileChange | None:
-    """Plan the reserved ScaffoldGuard metadata table migration."""
+    """Plan reserved metadata and legacy monorepo-layout migration."""
     path = _safe_structured_file_path(root, "scaffold-guard.toml")
     if not path.is_file():
         msg = f"Generated project config is missing: {path}"
@@ -73,6 +80,12 @@ def plan_project_metadata_migration(
     metadata["format_version"] = PROJECT_FORMAT_VERSION
     metadata["generated_with"] = generated_with
     metadata["requires_scaffold_guard"] = f">={minimum_version}"
+    _migrate_monorepo_metadata(
+        document,
+        layout=monorepo_layout,
+        python_workspace=python_workspace,
+        typescript_workspace=typescript_workspace,
+    )
     rendered = tomlkit.dumps(document)
     if rendered == original:
         return None
@@ -82,6 +95,43 @@ def plan_project_metadata_migration(
         description="Add or update versioned ScaffoldGuard project metadata.",
         content=rendered,
     )
+
+
+def _migrate_monorepo_metadata(
+    document: tomlkit.TOMLDocument,
+    *,
+    layout: MonorepoLayout | None,
+    python_workspace: WorkspacePath | None,
+    typescript_workspace: WorkspacePath | None,
+) -> None:
+    """Add missing monorepo metadata without rewriting an explicit selection."""
+    present = "monorepo" in document
+    value = _table_value(document, "monorepo")
+    if layout is None:
+        if present:
+            raise MigrationError(
+                "scaffold-guard.toml [monorepo] is only valid for monorepo projects."
+            )
+        return
+    if python_workspace is None or typescript_workspace is None:
+        raise MigrationError("Monorepo migration requires both workspace paths.")
+    if value is None and not present:
+        table = tomlkit.table()
+        table["layout"] = layout
+        table["python_workspace"] = python_workspace.as_posix()
+        table["typescript_workspace"] = typescript_workspace.as_posix()
+        document["monorepo"] = table
+        return
+    if not isinstance(value, Table):
+        raise MigrationError("scaffold-guard.toml [monorepo] must be a table.")
+    if not value:
+        raise MigrationError("scaffold-guard.toml [monorepo] must not be empty.")
+    unknown_keys = set(cast("Mapping[str, object]", value)) - MONOREPO_METADATA_KEYS
+    if unknown_keys:
+        unknown_key = sorted(unknown_keys)[0]
+        raise MigrationError(
+            f"scaffold-guard.toml [monorepo] contains unsupported key: {unknown_key}"
+        )
 
 
 def plan_dependency_floor_migration(

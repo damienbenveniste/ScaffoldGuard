@@ -78,13 +78,25 @@ jobs:
           if-no-files-found: error
 
   smoke-generated-project:
-    name: Smoke generated ${{ matrix.profile }}
+    name: Smoke generated ${{ matrix.profile }} (${{ matrix.layout }})
     runs-on: ubuntu-latest
     needs: build-wheel
     strategy:
       fail-fast: false
       matrix:
-        profile: ["minimal", "python", "typescript", "monorepo"]
+        include:
+          - profile: minimal
+            layout: none
+          - profile: python
+            layout: none
+          - profile: typescript
+            layout: none
+          - profile: monorepo
+            layout: application
+          - profile: monorepo
+            layout: library
+          - profile: monorepo
+            layout: custom
 
     steps:
       - name: Check out repository
@@ -110,4 +122,8 @@ jobs:
           path: dist
 
       - name: Smoke generated project
-        run: bash scripts/smoke-generated-project.sh "${{ matrix.profile }}" dist
+        run: >-
+          bash scripts/smoke-generated-project.sh
+          "${{ matrix.profile }}"
+          dist
+          "${{ matrix.layout }}"

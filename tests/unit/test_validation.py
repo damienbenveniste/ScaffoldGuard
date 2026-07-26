@@ -119,9 +119,9 @@ def test_validation_commands_for_monorepo_profile_cover_both_languages(
     full = validation_commands(config, quick=False)
 
     assert quick == (
-        ("uv", "run", "ruff", "format", "--check", "packages/python"),
-        ("uv", "run", "ruff", "check", "packages/python"),
-        ("uv", "run", "pytest", "packages/python/tests/unit"),
+        ("uv", "run", "ruff", "format", "--check", "apps/api"),
+        ("uv", "run", "ruff", "check", "apps/api"),
+        ("uv", "run", "pytest", "apps/api/tests/unit"),
         ("npm", "run", "ts:format:check"),
         ("npm", "run", "ts:lint"),
         ("npm", "run", "ts:typecheck"),
@@ -132,12 +132,34 @@ def test_validation_commands_for_monorepo_profile_cover_both_languages(
         "uv",
         "run",
         "mypy",
+        "apps/api/src",
+        "apps/api/tests",
+        "apps/api/examples",
+    ) in full
+    assert ("npm", "run", "ts:build") in full
+    assert ("npm", "run", "ts:coverage") in full
+
+
+def test_validation_commands_use_legacy_monorepo_workspace_defaults(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Monorepo configs without a workspace table retain legacy command paths."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+    _remove_toml_table(project_dir / "scaffold-guard.toml", "monorepo")
+    config = load_generated_project_config(project_dir)
+
+    full = validation_commands(config, quick=False)
+
+    assert ("uv", "run", "ruff", "check", "packages/python") in full
+    assert (
+        "uv",
+        "run",
+        "mypy",
         "packages/python/src",
         "packages/python/tests",
         "packages/python/examples",
     ) in full
-    assert ("npm", "run", "ts:build") in full
-    assert ("npm", "run", "ts:coverage") in full
 
 
 def test_validation_commands_for_monorepo_profile_respect_disabled_typescript_tools(
@@ -379,3 +401,14 @@ def test_validation_reports_scaffold_guard_check_policy_failures(
 
     assert report.exit_code == COMMAND_FAILED
     assert "project-health" in status.stdout
+
+
+def _remove_toml_table(path: Path, table_name: str) -> None:
+    """Remove one TOML table and its body from a generated config."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = lines.index(f"[{table_name}]")
+    end = next(
+        (index for index in range(start + 1, len(lines)) if lines[index].startswith("[")),
+        len(lines),
+    )
+    path.write_text("\n".join((*lines[:start], *lines[end:])) + "\n", encoding="utf-8")

@@ -115,16 +115,31 @@ def test_typescript_source_change_respects_disabled_optional_tools(tmp_path: Pat
     )
 
 
-def test_monorepo_source_changes_require_language_scoped_validation(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("python_workspace", "typescript_workspace"),
+    [
+        ("apps/api", "apps/web"),
+        ("packages/core", "packages/client"),
+        ("services/platform/backend", "clients/web/sdk"),
+        ("packages/python", "packages/typescript"),
+    ],
+)
+def test_monorepo_source_changes_require_language_scoped_validation(
+    tmp_path: Path,
+    python_workspace: str,
+    typescript_workspace: str,
+) -> None:
     """Mixed monorepo diffs produce scoped Python and TypeScript validation hints."""
     root = _generated_project(tmp_path, profile="monorepo")
+    python_path = Path(python_workspace)
+    typescript_path = Path(typescript_workspace)
 
     report = classify_changed_files(
         root,
         changed_files=(
-            Path("packages/python/src/demo/core.py"),
-            Path("packages/typescript/src/index.ts"),
-            Path("packages/typescript/tests/index.test.ts"),
+            python_path / "src/demo/core.py",
+            typescript_path / "src/index.ts",
+            typescript_path / "tests/index.test.ts",
         ),
         base="main",
         settings=ProjectValidationSettings(
@@ -133,16 +148,18 @@ def test_monorepo_source_changes_require_language_scoped_validation(tmp_path: Pa
             profile="monorepo",
             biome=True,
             vitest=True,
+            python_workspace=python_path,
+            typescript_workspace=typescript_path,
         ),
     )
 
-    assert "uv run ruff format --check packages/python" in report.required_validation
+    assert f"uv run ruff format --check {python_workspace}" in report.required_validation
     assert (
-        "uv run mypy packages/python/src packages/python/tests packages/python/examples"
-        in report.required_validation
+        f"uv run mypy {python_workspace}/src {python_workspace}/tests "
+        f"{python_workspace}/examples" in report.required_validation
     )
     assert (
-        "uv run pytest packages/python/tests --cov=demo --cov-fail-under=95"
+        f"uv run pytest {python_workspace}/tests --cov=demo --cov-fail-under=95"
         in report.required_validation
     )
     assert "npm run ts:format:check" in report.required_validation
@@ -293,6 +310,73 @@ def test_load_project_validation_settings_reads_generated_config(tmp_path: Path)
     settings = load_project_validation_settings(root)
 
     assert settings == ProjectValidationSettings(package_name="demo", coverage=95)
+
+
+def test_load_project_validation_settings_preserves_legacy_monorepo_defaults(
+    tmp_path: Path,
+) -> None:
+    """A missing monorepo table retains the historical workspace paths."""
+    root = tmp_path / "legacy"
+    root.mkdir()
+    (root / "scaffold-guard.toml").write_text(
+        '[project]\nprofile = "monorepo"\npackage = "demo"\ncoverage_fail_under = 95\n',
+        encoding="utf-8",
+    )
+
+    settings = load_project_validation_settings(root)
+
+    assert settings.python_workspace == Path("packages/python")
+    assert settings.typescript_workspace == Path("packages/typescript")
+
+
+@pytest.mark.parametrize(
+    ("layout", "python_workspace", "typescript_workspace", "match"),
+    [
+        ("custom", "../outside", "clients/web", "must not contain '..'"),
+        ("custom", "services/api;echo-owned", "clients/web", "only letters"),
+        ("custom", "services/api", "services/api/web", "must not overlap"),
+        ("application", "services/api", "clients/web", "requires workspaces"),
+    ],
+)
+def test_inspect_diff_rejects_invalid_configured_monorepo_workspaces(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    layout: str,
+    python_workspace: str,
+    typescript_workspace: str,
+    match: str,
+) -> None:
+    """Unsafe or inconsistent workspace config fails before command guidance."""
+    root = tmp_path / "invalid-workspaces"
+    root.mkdir()
+    (root / "scaffold-guard.toml").write_text(
+        (
+            '[project]\nprofile = "monorepo"\npackage = "demo"\ncoverage_fail_under = 95\n'
+            f'\n[monorepo]\nlayout = "{layout}"\n'
+            f'python_workspace = "{python_workspace}"\n'
+            f'typescript_workspace = "{typescript_workspace}"\n'
+        ),
+        encoding="utf-8",
+    )
+
+    def is_git_repository(_root: Path) -> bool:
+        return True
+
+    def changed_files(
+        _root: Path,
+        *,
+        base: str,
+    ) -> tuple[tuple[Path, ...], tuple[str, ...]]:
+        return ((Path(python_workspace) / "src/demo/core.py",), (base,))
+
+    monkeypatch.setattr("scaffold_guard.diffing._is_git_repository", is_git_repository)
+    monkeypatch.setattr(
+        "scaffold_guard.diffing.collect_changed_files",
+        changed_files,
+    )
+
+    with pytest.raises(DiffInspectionError, match=match):
+        inspect_diff(root, base="main")
 
 
 def test_load_project_validation_settings_reads_mode_aware_python_tools(tmp_path: Path) -> None:

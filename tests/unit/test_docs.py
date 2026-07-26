@@ -13,6 +13,14 @@ CODEX_ADAPTER_DOCS = (
     Path("docs/generated-project.md"),
 )
 COMMAND_REFERENCE_DOC = Path("docs/commands.md")
+MONOREPO_DOCS = (
+    Path("README.md"),
+    Path("docs/index.md"),
+    Path("docs/quickstart.md"),
+    Path("docs/commands.md"),
+    Path("docs/generated-project.md"),
+    Path("docs/checks.md"),
+)
 EXPECTED_PROFILE_LAYOUT_COUNT = 4
 
 
@@ -172,6 +180,57 @@ def test_generated_profile_layouts_list_the_tracked_manifest() -> None:
 
     assert readme_layouts.count(manifest_tree_entry) == EXPECTED_PROFILE_LAYOUT_COUNT
     assert generated_layouts.count(manifest_tree_entry) == EXPECTED_PROFILE_LAYOUT_COUNT
+
+
+def test_monorepo_docs_describe_current_layouts_and_legacy_upgrade() -> None:
+    """Public docs should describe semantic layouts without rewriting v0.2 seeds."""
+    combined = " ".join(
+        "\n".join(path.read_text(encoding="utf-8") for path in MONOREPO_DOCS).split()
+    )
+
+    expected_phrases = (
+        "`application`",
+        "`apps/api`",
+        "`apps/web`",
+        "`library`",
+        "`packages/core`",
+        "`packages/client`",
+        "`custom`",
+        "`--python-workspace`",
+        "`--typescript-workspace`",
+        "safe",
+        "relative",
+        "non-overlapping",
+        "`[monorepo]`",
+        "`legacy`",
+        "`packages/python`",
+        "`packages/typescript`",
+        "does not rename, move, or delete",
+    )
+
+    for phrase in expected_phrases:
+        assert phrase in combined
+
+    command_content = COMMAND_REFERENCE_DOC.read_text(encoding="utf-8")
+    assert "| `application` (default) | `apps/api` | `apps/web` |" in command_content
+    assert (
+        "`legacy`"
+        not in command_content.split("## `init`", maxsplit=1)[1].split("## `check`", maxsplit=1)[0]
+    )
+
+
+def test_generated_project_docs_show_monorepo_metadata() -> None:
+    """Generated-project docs should show the persisted workspace contract."""
+    generated = Path("docs/generated-project.md").read_text(encoding="utf-8")
+
+    expected_metadata = (
+        "[monorepo]\n"
+        'layout = "application"\n'
+        'python_workspace = "apps/api"\n'
+        'typescript_workspace = "apps/web"'
+    )
+    assert expected_metadata in generated
+    assert "`legacy` is internal persisted metadata" in generated
 
 
 def test_legacy_typescript_manifest_tracking_is_documented() -> None:

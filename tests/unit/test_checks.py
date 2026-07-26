@@ -28,11 +28,17 @@ from scaffold_guard.manifest import MANIFEST_RELATIVE_PATH, load_manifest, write
 from scaffold_guard.models import (
     AdapterSelection,
     CiChoice,
+    MonorepoLayoutChoice,
     ProfileChoice,
     PythonQualityMode,
     PythonTypechecker,
 )
-from scaffold_guard.scaffold import build_init_options, scaffold_package_project, with_quality_tools
+from scaffold_guard.scaffold import (
+    build_init_options,
+    scaffold_package_project,
+    with_monorepo_layout,
+    with_quality_tools,
+)
 
 PythonQualitySelection = tuple[PythonQualityMode, PythonQualityMode, PythonTypechecker]
 
@@ -677,28 +683,47 @@ def test_project_health_allows_disabled_typescript_optional_tools(tmp_path: Path
     assert result.ok
 
 
-def test_project_health_requires_monorepo_profile_paths(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("layout", "python_workspace", "typescript_workspace"),
+    [
+        ("application", "apps/api", "apps/web"),
+        ("library", "packages/core", "packages/client"),
+        ("custom", "services/platform/backend", "clients/web/sdk"),
+    ],
+)
+def test_project_health_requires_monorepo_profile_paths(
+    tmp_path: Path,
+    layout: MonorepoLayoutChoice,
+    python_workspace: str,
+    typescript_workspace: str,
+) -> None:
     """Monorepo profile health checks require both language workspace roots."""
-    project_dir = _generated_project(tmp_path, profile="monorepo")
-    _remove_tree(project_dir / "packages/typescript/src")
+    project_dir = _generated_project(
+        tmp_path,
+        profile="monorepo",
+        monorepo_workspaces=(
+            layout,
+            python_workspace if layout == "custom" else None,
+            typescript_workspace if layout == "custom" else None,
+        ),
+    )
+    _remove_tree(project_dir / typescript_workspace / "src")
 
     result = check_project_health(project_dir)
 
     assert not result.ok
-    assert any(finding.path == "packages/typescript/src" for finding in result.findings)
+    assert any(finding.path == f"{typescript_workspace}/src" for finding in result.findings)
 
 
 def test_project_health_requires_monorepo_typescript_vitest_config(tmp_path: Path) -> None:
     """Monorepo profile health checks require the TypeScript workspace Vitest config."""
     project_dir = _generated_project(tmp_path, profile="monorepo")
-    (project_dir / "packages/typescript/vitest.config.ts").unlink()
+    (project_dir / "apps/web/vitest.config.ts").unlink()
 
     result = check_project_health(project_dir)
 
     assert not result.ok
-    assert any(
-        finding.path == "packages/typescript/vitest.config.ts" for finding in result.findings
-    )
+    assert any(finding.path == "apps/web/vitest.config.ts" for finding in result.findings)
 
 
 def test_project_health_allows_disabled_monorepo_typescript_optional_tools(
@@ -926,6 +951,43 @@ def test_generated_files_checks_monorepo_readme_and_ci_tokens(tmp_path: Path) ->
     assert {"readme-missing-toolchain-command", "ci-missing-tool"}.issubset(codes)
 
 
+def test_generated_files_use_legacy_monorepo_workspace_defaults(tmp_path: Path) -> None:
+    """Legacy configs check generated content against the original workspace paths."""
+    project_dir = _generated_project(tmp_path, profile="monorepo")
+    _remove_toml_table(project_dir / "scaffold-guard.toml", "monorepo")
+
+    result = check_generated_files(project_dir)
+
+    assert any(
+        finding.path == "README.md"
+        and finding.code == "readme-missing-toolchain-command"
+        and "packages/python" in finding.message
+        for finding in result.findings
+    )
+    assert any(
+        finding.path == "package.json"
+        and finding.code == "package-json-missing-workspace-path"
+        and "packages/typescript" in finding.message
+        for finding in result.findings
+    )
+
+
+def test_generated_files_checks_package_json_workspaces_field(tmp_path: Path) -> None:
+    """Package scripts cannot mask a mismatched structured workspaces field."""
+    project_dir = _generated_project(tmp_path, profile="monorepo")
+    package_json = project_dir / "package.json"
+    _replace_text(
+        package_json, '"workspaces": [\n    "apps/web"\n  ]', '"workspaces": ["packages/client"]'
+    )
+
+    result = check_generated_files(project_dir)
+
+    assert any(
+        finding.path == "package.json" and finding.code == "package-json-missing-workspace-path"
+        for finding in result.findings
+    )
+
+
 def test_generated_files_respects_disabled_ci_tool_tokens(tmp_path: Path) -> None:
     """CI token checks only require enabled package tools."""
     project_dir = _generated_project(tmp_path, ruff=False, mypy=False, pyright=False)
@@ -967,6 +1029,20 @@ def test_generated_files_allows_missing_optional_generated_files(tmp_path: Path)
     )
 
     result = check_generated_files(project_dir)
+
+    assert result.ok
+
+
+@pytest.mark.parametrize("config_content", [None, "not = [valid toml\n"])
+def test_generated_files_handles_unavailable_generated_config(
+    tmp_path: Path,
+    config_content: str | None,
+) -> None:
+    """Direct generated-file checks remain graceful without usable project config."""
+    if config_content is not None:
+        (tmp_path / "scaffold-guard.toml").write_text(config_content, encoding="utf-8")
+
+    result = check_generated_files(tmp_path)
 
     assert result.ok
 
@@ -1080,17 +1156,133 @@ def test_config_consistency_detects_monorepo_typescript_coverage_mismatch(
 ) -> None:
     """Monorepo Vitest thresholds are checked in the TypeScript workspace."""
     project_dir = _generated_project(tmp_path, profile="monorepo")
-    vitest_path = project_dir / "packages/typescript/vitest.config.ts"
+    vitest_path = project_dir / "apps/web/vitest.config.ts"
     _replace_text(vitest_path, "statements: 95", "statements: 90")
 
     result = check_config_consistency(project_dir)
 
     assert not result.ok
     assert any(
-        finding.path == "packages/typescript/vitest.config.ts"
-        and finding.code == "coverage-config-mismatch"
+        finding.path == "apps/web/vitest.config.ts" and finding.code == "coverage-config-mismatch"
         for finding in result.findings
     )
+
+
+def test_config_consistency_detects_monorepo_pyproject_workspace_mismatch(
+    tmp_path: Path,
+) -> None:
+    """Structured Python config must retain the recorded monorepo workspace."""
+    project_dir = _generated_project(tmp_path, profile="monorepo")
+    pyproject = project_dir / "pyproject.toml"
+    _replace_text(pyproject, "apps/api", "packages/python")
+
+    result = check_config_consistency(project_dir)
+
+    assert any(
+        finding.path == "pyproject.toml" and finding.code == "monorepo-workspace-config-mismatch"
+        for finding in result.findings
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "configured_workspace", "replacement"),
+    [
+        ("pyrightconfig.json", "apps/api", "packages/python"),
+        ("biome.json", "apps/web", "packages/typescript"),
+    ],
+)
+def test_config_consistency_detects_monorepo_json_workspace_mismatch(
+    tmp_path: Path,
+    relative_path: str,
+    configured_workspace: str,
+    replacement: str,
+) -> None:
+    """Enabled JSON tool config must retain its recorded monorepo workspace."""
+    project_dir = _generated_project(tmp_path, profile="monorepo")
+    config_path = project_dir / relative_path
+    _replace_text(config_path, configured_workspace, replacement)
+
+    result = check_config_consistency(project_dir)
+
+    assert any(
+        finding.path == relative_path and finding.code == "monorepo-workspace-config-mismatch"
+        for finding in result.findings
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "old", "new", "code"),
+    [
+        (
+            "pyproject.toml",
+            'packages = ["apps/api/src/demo"]',
+            'packages = ["apps/api/src/demo", "packages/python/src/demo"]',
+            "monorepo-workspace-config-mismatch",
+        ),
+        (
+            "pyrightconfig.json",
+            '"include": ["apps/api/src", "apps/api/tests", "apps/api/examples"]',
+            (
+                '"include": ["apps/api/src", "apps/api/tests", "apps/api/examples", '
+                '"packages/python/src"]'
+            ),
+            "monorepo-workspace-config-mismatch",
+        ),
+        (
+            "biome.json",
+            '"apps/web/**",',
+            '"apps/web/**",\n      "packages/typescript/**",',
+            "monorepo-workspace-config-mismatch",
+        ),
+        (
+            "package.json",
+            '"workspaces": [\n    "apps/web"\n  ]',
+            '"workspaces": ["apps/web", "packages/typescript"]',
+            "package-json-missing-workspace-path",
+        ),
+    ],
+)
+def test_checks_reject_stale_additional_monorepo_workspace_paths(
+    tmp_path: Path,
+    relative_path: str,
+    old: str,
+    new: str,
+    code: str,
+) -> None:
+    """Generated structured config must contain only the configured workspaces."""
+    project_dir = _generated_project(tmp_path, profile="monorepo")
+    _replace_text(project_dir / relative_path, old, new)
+
+    report = run_checks(project_dir)
+
+    assert not report.ok
+    assert any(
+        item.path == relative_path and item.code == code
+        for check in report.checks
+        for item in check.findings
+    )
+
+
+def test_run_checks_reports_unsafe_monorepo_config_without_crashing(tmp_path: Path) -> None:
+    """Unsafe workspace metadata produces one generated-config finding."""
+    project_dir = _generated_project(tmp_path, profile="monorepo")
+    _replace_text(
+        project_dir / "scaffold-guard.toml",
+        'python_workspace = "apps/api"',
+        'python_workspace = "../escape"',
+    )
+
+    report = run_checks(project_dir)
+    generated_config_findings = [
+        finding
+        for check in report.checks
+        for finding in check.findings
+        if finding.code == "generated-config-invalid"
+    ]
+
+    assert not report.ok
+    assert len(generated_config_findings) == 1
+    assert generated_config_findings[0].path == "scaffold-guard.toml"
 
 
 def test_config_consistency_warns_when_lockfile_is_older(tmp_path: Path) -> None:
@@ -1129,6 +1321,7 @@ def _generated_project(
     python_quality: PythonQualitySelection = ("strict", "strict", "mypy+pyright"),
     biome: bool = True,
     vitest: bool = True,
+    monorepo_workspaces: tuple[MonorepoLayoutChoice, str | None, str | None] | None = None,
 ) -> Path:
     """Create a standard all-adapter generated project for checker tests."""
     ruff_mode, python_typecheck_mode, python_typechecker = python_quality
@@ -1144,6 +1337,14 @@ def _generated_project(
         dry_run=False,
         force=False,
     )
+    if monorepo_workspaces is not None:
+        layout, python_workspace, typescript_workspace = monorepo_workspaces
+        options = with_monorepo_layout(
+            options,
+            layout=layout,
+            python_workspace=python_workspace,
+            typescript_workspace=typescript_workspace,
+        )
     options = with_quality_tools(
         options,
         ruff=ruff,
@@ -1179,6 +1380,17 @@ def _remove_scaffold_guard_metadata(path: Path) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     start = lines.index("[scaffold_guard]")
     end = lines.index("[agents]")
+    path.write_text("\n".join((*lines[:start], *lines[end:])) + "\n", encoding="utf-8")
+
+
+def _remove_toml_table(path: Path, table_name: str) -> None:
+    """Remove one TOML table and its body from a generated config."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = lines.index(f"[{table_name}]")
+    end = next(
+        (index for index in range(start + 1, len(lines)) if lines[index].startswith("[")),
+        len(lines),
+    )
     path.write_text("\n".join((*lines[:start], *lines[end:])) + "\n", encoding="utf-8")
 
 
