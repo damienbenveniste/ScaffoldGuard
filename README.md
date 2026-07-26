@@ -103,7 +103,8 @@ scaffold-guard validate --quick
 ```
 
 Generate a Python + TypeScript monorepo when you want both language workspaces
-managed from one repository:
+managed from one repository. The default `application` layout puts the Python
+workspace in `apps/api` and the TypeScript workspace in `apps/web`:
 
 ```bash
 scaffold-guard init app_demo --profile monorepo
@@ -112,6 +113,19 @@ uv sync --all-groups
 npm install
 scaffold-guard validate --quick
 ```
+
+Guided setup prompts for the monorepo layout. For non-interactive generation,
+choose `application`, `library`, or `custom` with flags:
+
+```bash
+scaffold-guard init app_demo --profile monorepo --monorepo-layout application
+scaffold-guard init sdk_demo --profile monorepo --monorepo-layout library
+scaffold-guard init custom_demo --profile monorepo --monorepo-layout custom \
+  --python-workspace services/api --typescript-workspace clients/web
+```
+
+The `library` layout uses `packages/core` and `packages/client`. Custom
+workspace paths must be explicit, safe, non-overlapping relative directories.
 
 Use `--dry-run` to preview files and `--force` to overwrite known generated
 files.
@@ -178,7 +192,8 @@ my_project/
   tests/  # when Vitest is enabled
 ```
 
-The `monorepo` profile adds Python and TypeScript workspaces:
+The `monorepo` profile adds Python and TypeScript workspaces. Its default
+`application` layout is:
 
 ```text
 my_project/
@@ -192,9 +207,13 @@ my_project/
   pyrightconfig.json  # when Pyright is enabled
   scaffold-guard.toml
   .github/workflows/ci.yml  # or .gitlab-ci.yml
-  packages/python/
-  packages/typescript/
+  apps/api/
+  apps/web/
 ```
+
+The `library` layout replaces those workspace roots with `packages/core/` and
+`packages/client/`. A `custom` layout uses the exact safe relative directories
+passed with `--python-workspace` and `--typescript-workspace`.
 
 Adapter files are added according to `--agent`:
 
@@ -217,7 +236,7 @@ and push path while protecting raw `git commit` and `git push`.
 ## Commands
 
 ```bash
-scaffold-guard init [NAME] [--guided] [--profile minimal|python|typescript|monorepo] [--agent codex|claude|cursor|all] [--ci github|gitlab] [--ruff strict|standard|off] [--python-typecheck strict|standard|off] [--python-typechecker mypy+pyright|mypy|pyright] [--typescript-mode strict|standard] [--typescript-lint biome|off] [--typescript-test vitest|off]
+scaffold-guard init [NAME] [--guided] [--profile minimal|python|typescript|monorepo] [--monorepo-layout application|library|custom] [--python-workspace PATH] [--typescript-workspace PATH] [--agent codex|claude|cursor|all] [--ci github|gitlab] [--ruff strict|standard|off] [--python-typecheck strict|standard|off] [--python-typechecker mypy+pyright|mypy|pyright] [--typescript-mode strict|standard] [--typescript-lint biome|off] [--typescript-test vitest|off]
 scaffold-guard check [--path .] [--json]
 scaffold-guard inspect-diff [--path .] [--base main] [--json]
 scaffold-guard validate [--path .] [--quick] [--json]
@@ -249,6 +268,9 @@ migrations to reserved metadata in `scaffold-guard.toml` and the
 `scaffold-guard` development requirement or tool-carrier in `pyproject.toml`,
 and never touch seed files. Orphans are reported, not deleted or pruned. After
 an applied upgrade, run `scaffold-guard check` and `scaffold-guard validate`.
+Existing v0.2 monorepos are recorded with the internal `legacy` layout and
+their existing `packages/python` and `packages/typescript` workspace paths;
+upgrade does not move or delete their seed files.
 
 Profile choices:
 
@@ -257,7 +279,7 @@ Profile choices:
 | `minimal` | Guardrails only; no Python or TypeScript source scaffold |
 | `python` | Python package scaffold with `src/`, tests, docs, and `uv` |
 | `typescript` | TypeScript package scaffold with npm and configurable TypeScript tooling |
-| `monorepo` | Python + TypeScript workspaces under `packages/` |
+| `monorepo` | Python + TypeScript workspaces using an application, library, or custom layout |
 
 For when to use each command, available options, and exit-code behavior, read
 the full command reference:

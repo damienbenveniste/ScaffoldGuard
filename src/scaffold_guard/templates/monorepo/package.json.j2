@@ -5,20 +5,20 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/typescript"
+    "{{ typescript_workspace }}"
   ],
   "scripts": {
 {%- if use_biome %}
-    "ts:format": "biome format --write packages/typescript",
-    "ts:format:check": "biome ci packages/typescript",
-    "ts:lint": "biome lint packages/typescript",
+    "ts:format": "biome format --write {{ typescript_workspace }}",
+    "ts:format:check": "biome ci {{ typescript_workspace }}",
+    "ts:lint": "biome lint {{ typescript_workspace }}",
 {%- endif %}
-    "ts:typecheck": "tsc -p packages/typescript/tsconfig.json --noEmit",
+    "ts:typecheck": "tsc -p {{ typescript_workspace }}/tsconfig.json --noEmit",
 {%- if use_vitest %}
-    "ts:test": "vitest run --config packages/typescript/vitest.config.ts",
-    "ts:coverage": "vitest run --config packages/typescript/vitest.config.ts --coverage",
+    "ts:test": "vitest run --config {{ typescript_workspace }}/vitest.config.ts",
+    "ts:coverage": "vitest run --config {{ typescript_workspace }}/vitest.config.ts --coverage",
 {%- endif %}
-    "ts:build": "tsc -p packages/typescript/tsconfig.build.json"
+    "ts:build": "tsc -p {{ typescript_workspace }}/tsconfig.build.json"
   },
   "devDependencies": {
 {%- if use_biome %}

@@ -22,7 +22,13 @@ from scaffold_guard.manifest import (
     bytes_sha256,
     load_manifest,
 )
-from scaffold_guard.models import AdapterSelection, InitOptions, ProfileChoice, TemplateLifecycle
+from scaffold_guard.models import (
+    AdapterSelection,
+    InitOptions,
+    ProfileChoice,
+    TemplateLifecycle,
+    WorkspacePath,
+)
 
 CODEX_ADAPTER_PATHS: tuple[Path, ...] = (
     Path(".codex/config.toml"),
@@ -57,6 +63,16 @@ class _ManifestConfig(Protocol):
     @property
     def profile(self) -> ProfileChoice:
         """Return the configured project profile."""
+        ...
+
+    @property
+    def python_workspace(self) -> WorkspacePath | None:
+        """Return the configured Python workspace."""
+        ...
+
+    @property
+    def typescript_workspace(self) -> WorkspacePath | None:
+        """Return the configured TypeScript workspace."""
         ...
 
     @property
@@ -110,8 +126,15 @@ class _ProjectConfigModule(Protocol):
 def check_project_health(root: Path) -> CheckResult:
     """Verify required generated-project files and adapter health."""
     findings: list[CheckFinding] = []
+    python_workspace, typescript_workspace = _configured_workspace_paths(root)
     findings.extend(_check_manifest_health(root))
-    findings.extend(_missing_required_paths(root))
+    findings.extend(
+        _missing_required_paths(
+            root,
+            python_workspace=python_workspace,
+            typescript_workspace=typescript_workspace,
+        )
+    )
     findings.extend(_check_codex_adapter(root))
     findings.extend(_check_claude_wrapper(root))
     findings.extend(_check_cursor_rules(root))
@@ -291,7 +314,30 @@ def _manifest_file_finding(root: Path, path: Path, expected_sha256: str) -> Chec
     )
 
 
-def _missing_required_paths(root: Path) -> list[CheckFinding]:
+def _configured_workspace_paths(root: Path) -> tuple[Path | None, Path | None]:
+    """Return configured monorepo workspaces when config is valid."""
+    project_config = cast(
+        "_ProjectConfigModule",
+        importlib.import_module("scaffold_guard.project_config"),
+    )
+    try:
+        config = project_config.load_generated_project_config(root)
+    except ValueError:
+        return None, None
+    if config.profile != "monorepo":
+        return None, None
+    return (
+        config.python_workspace.path if config.python_workspace else None,
+        config.typescript_workspace.path if config.typescript_workspace else None,
+    )
+
+
+def _missing_required_paths(
+    root: Path,
+    *,
+    python_workspace: Path | None,
+    typescript_workspace: Path | None,
+) -> list[CheckFinding]:
     """Return findings for missing required project paths."""
     required_paths = [
         Path("AGENTS.md"),
@@ -302,8 +348,14 @@ def _missing_required_paths(root: Path) -> list[CheckFinding]:
         required_paths.extend(_package_required_paths(root))
     if profile == "typescript":
         required_paths.extend(_typescript_required_paths(root))
-    if profile == "monorepo":
-        required_paths.extend(_monorepo_required_paths(root))
+    if profile == "monorepo" and python_workspace is not None and typescript_workspace is not None:
+        required_paths.extend(
+            _monorepo_required_paths(
+                root,
+                python_workspace=python_workspace,
+                typescript_workspace=typescript_workspace,
+            )
+        )
     if github_actions_enabled(root):
         required_paths.append(Path(".github/workflows/ci.yml"))
     if gitlab_ci_enabled(root):
@@ -384,24 +436,27 @@ def _typescript_required_paths(root: Path) -> list[Path]:
     return paths
 
 
-def _monorepo_required_paths(root: Path) -> list[Path]:
+def _monorepo_required_paths(
+    root: Path,
+    *,
+    python_workspace: Path,
+    typescript_workspace: Path,
+) -> list[Path]:
     """Return required paths for generated Python and TypeScript monorepos."""
     paths = [
         Path("pyproject.toml"),
         Path("package.json"),
-        Path("packages/python/src"),
-        Path("packages/python/tests"),
-        Path("packages/typescript/package.json"),
-        Path("packages/typescript/tsconfig.json"),
-        Path("packages/typescript/tsconfig.build.json"),
-        Path("packages/typescript/src"),
+        python_workspace / "src",
+        python_workspace / "tests",
+        typescript_workspace / "package.json",
+        typescript_workspace / "tsconfig.json",
+        typescript_workspace / "tsconfig.build.json",
+        typescript_workspace / "src",
     ]
     if tool_enabled(root, "biome"):
         paths.append(Path("biome.json"))
     if tool_enabled(root, "vitest"):
-        paths.extend(
-            (Path("packages/typescript/vitest.config.ts"), Path("packages/typescript/tests"))
-        )
+        paths.extend((typescript_workspace / "vitest.config.ts", typescript_workspace / "tests"))
     if tool_enabled(root, "pyright"):
         paths.append(Path("pyrightconfig.json"))
     return paths

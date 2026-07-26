@@ -11,6 +11,7 @@ from zipfile import ZipFile
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSPECT_WHEEL = REPO_ROOT / "scripts" / "inspect-wheel.py"
 SMOKE_GENERATED_PROJECT = REPO_ROOT / "scripts" / "smoke-generated-project.sh"
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def load_inspect_wheel() -> ModuleType:
@@ -76,7 +77,33 @@ def test_smoke_generated_project_script_uses_exact_built_wheel() -> None:
     assert (
         'uv pip install --python .venv/bin/python --reinstall --no-deps "${wheel_file}"' in script
     )
+    assert 'tool_bin_dir="${UV_TOOL_BIN_DIR:-${HOME}/.local/bin}"' in script
     assert "uv run --no-sync scaffold-guard upgrade" in script
     assert "uv run --no-sync scaffold-guard validate" in script
     assert "direct_url.json" in script
     assert "actual != expected" in script
+
+
+def test_generated_project_smokes_cover_every_monorepo_layout() -> None:
+    """Built-wheel CI exercises fixed and custom semantic monorepo layouts."""
+    script = SMOKE_GENERATED_PROJECT.read_text(encoding="utf-8")
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert '--monorepo-layout "${monorepo_layout}"' in script
+    assert "--python-workspace services/backend" in script
+    assert "--typescript-workspace clients/browser" in script
+    assert 'actual = config.get("monorepo")' in script
+    assert '"layout": layout' in script
+    assert '"python_workspace": python_workspace' in script
+    assert '"typescript_workspace": typescript_workspace' in script
+    assert "if actual != expected:" in script
+    assert "if not Path(workspace).is_dir():" in script
+    for python_workspace, typescript_workspace in (
+        ("apps/api", "apps/web"),
+        ("packages/core", "packages/client"),
+        ("services/backend", "clients/browser"),
+    ):
+        assert f'expected_python_workspace="{python_workspace}"' in script
+        assert f'expected_typescript_workspace="{typescript_workspace}"' in script
+    for layout in ("application", "library", "custom"):
+        assert f"layout: {layout}" in workflow

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import shlex
 from dataclasses import replace
 from pathlib import Path
@@ -15,6 +16,7 @@ from scaffold_guard.models import (
     AgentChoice,
     CiChoice,
     InitOptions,
+    MonorepoLayoutChoice,
     ProfileChoice,
     TemplateLifecycle,
 )
@@ -23,11 +25,13 @@ from scaffold_guard.scaffold import (
     RenderedFile,
     build_init_options,
     build_project_manifest,
+    build_render_context,
     normalize_project_name,
     package_template_specs,
     render_file,
     render_package_files,
     scaffold_package_project,
+    with_monorepo_layout,
     with_quality_tools,
     write_rendered_files,
 )
@@ -359,8 +363,8 @@ def test_monorepo_template_specs_include_python_and_typescript_rules(tmp_path: P
 
     assert "pyproject.toml" in destinations
     assert "package.json" in destinations
-    assert "packages/python/src/{package_name}/core.py" in destinations
-    assert "packages/typescript/src/index.ts" in destinations
+    assert "apps/api/src/{package_name}/core.py" in destinations
+    assert "apps/web/src/index.ts" in destinations
     assert ".claude/rules/python.md" in destinations
     assert ".claude/rules/typescript.md" in destinations
     assert ".cursor/rules/python.mdc" in destinations
@@ -380,10 +384,95 @@ def test_monorepo_template_specs_omit_disabled_typescript_tool_files(tmp_path: P
     destinations = {spec.destination for spec in package_template_specs(options)}
 
     assert "biome.json" not in destinations
-    assert "packages/typescript/vitest.config.ts" not in destinations
-    assert "packages/typescript/tests/index.test.ts" not in destinations
-    assert "packages/typescript/tsconfig.json" in destinations
-    assert "packages/typescript/package.json" in destinations
+    assert "apps/web/vitest.config.ts" not in destinations
+    assert "apps/web/tests/index.test.ts" not in destinations
+    assert "apps/web/tsconfig.json" in destinations
+    assert "apps/web/package.json" in destinations
+
+
+@pytest.mark.parametrize(
+    ("layout", "python_workspace", "typescript_workspace"),
+    [
+        ("library", "packages/core", "packages/client"),
+        ("custom", "services/backend", "frontends/browser"),
+    ],
+)
+def test_monorepo_template_specs_derive_workspace_destinations_with_stable_ids(
+    tmp_path: Path,
+    layout: MonorepoLayoutChoice,
+    python_workspace: str,
+    typescript_workspace: str,
+) -> None:
+    """Configured layouts relocate current specs without changing template identity."""
+    options = with_monorepo_layout(
+        _init_options(tmp_path, agent="codex", profile="monorepo"),
+        layout=layout,
+        python_workspace=python_workspace if layout == "custom" else None,
+        typescript_workspace=typescript_workspace if layout == "custom" else None,
+    )
+
+    specs = package_template_specs(options)
+    specs_by_id = {spec.template_id: spec for spec in specs}
+
+    assert (
+        specs_by_id["monorepo/packages/python/src/package/core.py"].destination
+        == f"{python_workspace}/src/{{package_name}}/core.py"
+    )
+    assert (
+        specs_by_id["monorepo/packages/typescript/src/index.ts"].destination
+        == f"{typescript_workspace}/src/index.ts"
+    )
+
+
+def test_custom_monorepo_render_context_and_content_use_exact_paths(tmp_path: Path) -> None:
+    """Custom workspace strings reach context, destinations, config, and rendered commands."""
+    options = with_monorepo_layout(
+        _init_options(tmp_path, agent="codex", profile="monorepo"),
+        layout="custom",
+        python_workspace="services/backend",
+        typescript_workspace="frontends/browser",
+    )
+
+    context = build_render_context(options)
+    rendered = {file.path: file.content for file in render_package_files(options)}
+
+    assert context["monorepo_layout"] == "custom"
+    assert context["python_workspace"] == "services/backend"
+    assert context["typescript_workspace"] == "frontends/browser"
+    assert Path("services/backend/src/demo/core.py") in rendered
+    assert Path("frontends/browser/src/index.ts") in rendered
+    assert "packages/python" not in rendered[Path("pyproject.toml")]
+    assert "packages/typescript" not in rendered[Path("package.json")]
+    assert '[monorepo]\nlayout = "custom"' in rendered[Path("scaffold-guard.toml")]
+
+
+@pytest.mark.parametrize(
+    ("profile", "layout", "python_workspace", "typescript_workspace", "message"),
+    [
+        ("python", "application", None, None, "require --profile monorepo"),
+        ("monorepo", "application", "services/api", None, "does not accept"),
+        ("monorepo", "custom", None, "apps/web", "requires both workspace paths"),
+        ("monorepo", "custom", "workspaces", "workspaces/web", "must not overlap"),
+    ],
+)
+def test_with_monorepo_layout_rejects_invalid_option_combinations(
+    tmp_path: Path,
+    profile: ProfileChoice,
+    layout: MonorepoLayoutChoice,
+    python_workspace: str | None,
+    typescript_workspace: str | None,
+    message: str,
+) -> None:
+    """CLI-equivalent layout inputs enforce profile, explicitness, and separation."""
+    options = _init_options(tmp_path, agent="codex", profile=profile)
+
+    with pytest.raises(ValueError, match=message):
+        with_monorepo_layout(
+            options,
+            layout=layout,
+            python_workspace=python_workspace,
+            typescript_workspace=typescript_workspace,
+        )
 
 
 def test_package_template_specs_omit_pyright_config_when_disabled(tmp_path: Path) -> None:
@@ -486,7 +575,7 @@ def test_render_package_files_renders_codex_hooks_and_profile_rules(tmp_path: Pa
     assert git_rules.count('decision = "forbidden"') >= MINIMUM_FORBIDDEN_GIT_RULES
     assert 'decision = "allow"' in git_rules
     assert f'"scaffold-guard>={GENERATED_PROJECT_MINIMUM_VERSION}"' in pyproject
-    assert 'pattern = ["uv", "run", "ruff", "check", "packages/python"]' in rules
+    assert 'pattern = ["uv", "run", "ruff", "check", "apps/api"]' in rules
     assert 'pattern = ["npm", "run", "ts:typecheck"]' in rules
 
 
@@ -662,6 +751,45 @@ def test_scaffold_package_project_dry_run_does_not_create_target(tmp_path: Path)
     assert Path("AGENTS.md") in summary.files
     assert Path(".scaffold-guard/manifest.json") in summary.files
     assert not (tmp_path / "demo").exists()
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+@pytest.mark.parametrize(
+    ("python_workspace", "typescript_workspace", "root_file"),
+    [
+        ("README.md", "clients/web", "README.md"),
+        ("services/api", "package.json", "package.json"),
+        ("pyproject.toml/backend", "clients/web", "pyproject.toml"),
+    ],
+)
+def test_scaffold_package_project_rejects_workspace_root_file_collisions_before_writes(
+    tmp_path: Path,
+    *,
+    dry_run: bool,
+    python_workspace: str,
+    typescript_workspace: str,
+    root_file: str,
+) -> None:
+    """Dry-run and init reject workspace trees rooted at generated files."""
+    options = with_monorepo_layout(
+        _init_options(
+            tmp_path,
+            agent="codex",
+            profile="monorepo",
+            dry_run=dry_run,
+        ),
+        layout="custom",
+        python_workspace=python_workspace,
+        typescript_workspace=typescript_workspace,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=rf"destinations must not overlap: {re.escape(root_file)} and ",
+    ):
+        scaffold_package_project(options)
+
+    assert not options.target_dir.exists()
 
 
 def test_scaffold_package_project_writes_manifest(tmp_path: Path) -> None:

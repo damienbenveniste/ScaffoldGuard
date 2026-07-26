@@ -26,8 +26,14 @@ from scaffold_guard.manifest import (
     write_manifest,
 )
 from scaffold_guard.migrations import StructuredFileChange
+from scaffold_guard.models import WorkspacePath
 from scaffold_guard.project_config import load_generated_project_config
-from scaffold_guard.scaffold import RenderedFile, build_init_options, build_render_context
+from scaffold_guard.scaffold import (
+    RenderedFile,
+    build_init_options,
+    build_render_context,
+    scaffold_package_project,
+)
 from scaffold_guard.upgrade import (
     ACTION_ORDER,
     UpgradeAction,
@@ -181,7 +187,7 @@ def test_apply_rolls_back_pyproject_when_existing_lock_refresh_fails(
     project_dir = generated_project(tmp_path)
     pyproject_path = project_dir / "pyproject.toml"
     original_pyproject = pyproject_path.read_text(encoding="utf-8")
-    legacy_pyproject = original_pyproject.replace("scaffold-guard>=0.2.0", "scaffold-guard>=0.1.3")
+    legacy_pyproject = original_pyproject.replace("scaffold-guard>=0.3.0", "scaffold-guard>=0.1.3")
     pyproject_path.write_text(legacy_pyproject, encoding="utf-8")
     lock_path = project_dir / "uv.lock"
     lock_path.write_text("old lock\n", encoding="utf-8")
@@ -210,7 +216,7 @@ def test_upgrade_does_not_lock_when_lockfile_was_absent(
     project_dir = generated_project(tmp_path)
     pyproject_path = project_dir / "pyproject.toml"
     legacy_pyproject = pyproject_path.read_text(encoding="utf-8").replace(
-        "scaffold-guard>=0.2.0",
+        "scaffold-guard>=0.3.0",
         "scaffold-guard>=0.1.3",
     )
     pyproject_path.write_text(legacy_pyproject, encoding="utf-8")
@@ -222,6 +228,84 @@ def test_upgrade_does_not_lock_when_lockfile_was_absent(
     plan = plan_upgrade(project_dir)
 
     assert not plan.lock_after_apply
+
+
+def test_v020_monorepo_upgrade_records_legacy_layout_without_moving_seed_files(
+    tmp_path: Path,
+) -> None:
+    """A v0.2 monorepo keeps historical workspaces while adopting v0.3 metadata."""
+    options = build_init_options(
+        "demo",
+        base_dir=tmp_path,
+        agent="all",
+        profile="monorepo",
+        license_name="MIT",
+        python_min="3.13",
+        coverage=95,
+        ci="github",
+        dry_run=False,
+        force=False,
+    )
+    legacy_options = replace(
+        options,
+        monorepo_layout="legacy",
+        python_workspace=WorkspacePath.parse(
+            "packages/python",
+            field_name="python_workspace",
+        ),
+        typescript_workspace=WorkspacePath.parse(
+            "packages/typescript",
+            field_name="typescript_workspace",
+        ),
+    )
+    scaffold_package_project(legacy_options)
+    project_dir = tmp_path / "demo"
+    config_path = project_dir / "scaffold-guard.toml"
+    config_text = config_path.read_text(encoding="utf-8")
+    legacy_table = (
+        '[monorepo]\nlayout = "legacy"\n'
+        'python_workspace = "packages/python"\n'
+        'typescript_workspace = "packages/typescript"\n\n'
+    )
+    config_path.write_text(
+        config_text.replace(legacy_table, "")
+        .replace('generated_with = "0.3.0"', 'generated_with = "0.2.0"')
+        .replace('requires_scaffold_guard = ">=0.3.0"', 'requires_scaffold_guard = ">=0.2.0"'),
+        encoding="utf-8",
+    )
+    pyproject_path = project_dir / "pyproject.toml"
+    _replace_text(pyproject_path, "scaffold-guard>=0.3.0", "scaffold-guard>=0.2.0")
+    manifest_path = project_dir / MANIFEST_RELATIVE_PATH
+    manifest = load_manifest(manifest_path)
+    write_manifest(
+        manifest_path,
+        replace(
+            manifest,
+            generated_with="0.2.0",
+            requires_scaffold_guard=">=0.2.0",
+        ),
+    )
+
+    plan = plan_upgrade(project_dir)
+    verification = apply_upgrade_plan(plan)
+    upgraded_config = load_generated_project_config(project_dir)
+
+    assert not plan.conflicts
+    assert _action_for(plan, "scaffold-guard.toml").kind == "migrate"
+    assert verification.ok
+    assert upgraded_config.monorepo_layout == "legacy"
+    assert upgraded_config.python_workspace == WorkspacePath.parse(
+        "packages/python",
+        field_name="python_workspace",
+    )
+    assert upgraded_config.typescript_workspace == WorkspacePath.parse(
+        "packages/typescript",
+        field_name="typescript_workspace",
+    )
+    assert (project_dir / "packages/python").is_dir()
+    assert (project_dir / "packages/typescript").is_dir()
+    assert not (project_dir / "apps/api").exists()
+    assert not (project_dir / "apps/web").exists()
 
 
 def test_upgrade_detects_crlf_byte_drift_in_managed_file(
@@ -552,14 +636,14 @@ def test_apply_rolls_back_all_upgrade_outputs_when_verification_fails(
     config_path = project_dir / "scaffold-guard.toml"
     config_text = config_path.read_text(encoding="utf-8")
     config_path.write_text(
-        config_text.replace('generated_with = "0.2.0"', 'generated_with = "0.1.5"')
-        .replace('requires_scaffold_guard = ">=0.2.0"', 'requires_scaffold_guard = ">=0.1.3"')
+        config_text.replace('generated_with = "0.3.0"', 'generated_with = "0.1.5"')
+        .replace('requires_scaffold_guard = ">=0.3.0"', 'requires_scaffold_guard = ">=0.1.3"')
         .replace("ruff = true", "ruff = false")
         .replace('ruff_mode = "strict"', 'ruff_mode = "off"'),
         encoding="utf-8",
     )
     pyproject_path = project_dir / "pyproject.toml"
-    _replace_text(pyproject_path, "scaffold-guard>=0.2.0", "scaffold-guard>=0.1.3")
+    _replace_text(pyproject_path, "scaffold-guard>=0.3.0", "scaffold-guard>=0.1.3")
     manifest_path = project_dir / MANIFEST_RELATIVE_PATH
     manifest = load_manifest(manifest_path)
     write_manifest(

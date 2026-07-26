@@ -27,12 +27,14 @@ from scaffold_guard.models import (
     CiChoice,
     InitOptions,
     LicenseChoice,
+    MonorepoLayoutChoice,
     ProfileChoice,
     PythonQualityMode,
     PythonTypechecker,
     ScaffoldSummary,
     TemplateLifecycle,
     TemplateSpec,
+    WorkspacePath,
     normalize_profile_choice,
     profile_includes_python,
 )
@@ -279,6 +281,43 @@ def build_init_options(
     )
 
 
+def with_monorepo_layout(
+    options: InitOptions,
+    *,
+    layout: MonorepoLayoutChoice | None,
+    python_workspace: str | None,
+    typescript_workspace: str | None,
+) -> InitOptions:
+    """Return init options with a validated monorepo workspace layout."""
+    if options.profile != "monorepo":
+        if layout is not None or python_workspace is not None or typescript_workspace is not None:
+            raise ValueError("Monorepo layout options require --profile monorepo.")
+        return options
+    selected_layout = layout or "application"
+    if selected_layout in {"application", "library"} and (
+        python_workspace is not None or typescript_workspace is not None
+    ):
+        raise ValueError(
+            f"{selected_layout} monorepo layout does not accept explicit workspace paths."
+        )
+    selected_python_workspace = (
+        None
+        if python_workspace is None
+        else WorkspacePath.parse(python_workspace, field_name="python_workspace")
+    )
+    selected_typescript_workspace = (
+        None
+        if typescript_workspace is None
+        else WorkspacePath.parse(typescript_workspace, field_name="typescript_workspace")
+    )
+    return replace(
+        options,
+        monorepo_layout=selected_layout,
+        python_workspace=selected_python_workspace,
+        typescript_workspace=selected_typescript_workspace,
+    )
+
+
 def with_quality_tools(
     options: InitOptions,
     *,
@@ -326,6 +365,13 @@ def build_render_context(options: InitOptions) -> Mapping[str, object]:
         "project_slug": options.project_slug,
         "package_name": options.package_name,
         "typescript_package_name": options.project_slug,
+        "monorepo_layout": options.monorepo_layout or "",
+        "python_workspace": (
+            "" if options.python_workspace is None else options.python_workspace.as_posix()
+        ),
+        "typescript_workspace": (
+            "" if options.typescript_workspace is None else options.typescript_workspace.as_posix()
+        ),
         "profile": options.profile,
         "license": options.license,
         "python_min": options.python_min,
@@ -417,10 +463,11 @@ def _filtered_profile_template_specs(options: InitOptions) -> tuple[TemplateSpec
     if options.profile == "typescript" and not options.vitest_enabled:
         skipped_destinations.update({"vitest.config.ts", "tests/index.test.ts"})
     if options.profile == "monorepo" and not options.vitest_enabled:
+        typescript_workspace = _required_workspace_path(options.typescript_workspace)
         skipped_destinations.update(
             {
-                "packages/typescript/vitest.config.ts",
-                "packages/typescript/tests/index.test.ts",
+                f"{typescript_workspace}/vitest.config.ts",
+                f"{typescript_workspace}/tests/index.test.ts",
             }
         )
     return tuple(spec for spec in profile_specs if spec.destination not in skipped_destinations)
@@ -459,7 +506,47 @@ def _profile_template_specs(options: InitOptions) -> tuple[TemplateSpec, ...]:
     """Return base profile templates plus selected CI provider templates."""
     base_specs, github_specs, gitlab_specs = _profile_spec_groups(options.profile)
     ci_specs = gitlab_specs if options.ci == "gitlab" else github_specs
-    return (*base_specs, *ci_specs)
+    specs = (*base_specs, *ci_specs)
+    if options.profile != "monorepo":
+        return specs
+    python_workspace = _required_workspace_path(options.python_workspace)
+    typescript_workspace = _required_workspace_path(options.typescript_workspace)
+    return tuple(
+        replace(
+            spec,
+            destination=_configured_monorepo_destination(
+                spec.destination,
+                python_workspace=python_workspace,
+                typescript_workspace=typescript_workspace,
+            ),
+        )
+        for spec in specs
+    )
+
+
+def _required_workspace_path(workspace: WorkspacePath | None) -> str:
+    """Return one workspace path after enforcing normalized monorepo state."""
+    if workspace is None:
+        raise ValueError("Monorepo profile requires configured workspace paths.")
+    return workspace.as_posix()
+
+
+def _configured_monorepo_destination(
+    destination: str,
+    *,
+    python_workspace: str,
+    typescript_workspace: str,
+) -> str:
+    """Replace historical workspace prefixes in a monorepo destination."""
+    if destination == "packages/python":
+        return python_workspace
+    if destination.startswith("packages/python/"):
+        return f"{python_workspace}/{destination.removeprefix('packages/python/')}"
+    if destination == "packages/typescript":
+        return typescript_workspace
+    if destination.startswith("packages/typescript/"):
+        return f"{typescript_workspace}/{destination.removeprefix('packages/typescript/')}"
+    return destination
 
 
 def _profile_spec_groups(
@@ -591,6 +678,8 @@ def write_rendered_files(
             raise ValueError(msg)
         planned_paths.append(relative_path)
 
+    _validate_planned_path_collisions(planned_paths)
+
     if dry_run:
         return tuple(planned_paths)
 
@@ -617,6 +706,26 @@ def write_rendered_files(
         write_text_safely(output_path, rendered_file.content, force=force)
 
     return tuple(planned_paths)
+
+
+def _validate_planned_path_collisions(planned_paths: Iterable[Path]) -> None:
+    """Reject duplicate or parent-child destinations before any scaffold write."""
+    ordered_paths = tuple(sorted(planned_paths, key=lambda path: path.as_posix()))
+    for index, path in enumerate(ordered_paths):
+        collision = next(
+            (
+                candidate
+                for candidate in ordered_paths[index + 1 :]
+                if candidate == path or candidate.is_relative_to(path)
+            ),
+            None,
+        )
+        if collision is not None:
+            msg = (
+                "Generated file destinations must not overlap: "
+                f"{path.as_posix()} and {collision.as_posix()}"
+            )
+            raise ValueError(msg)
 
 
 def _toml_bool(value: bool) -> str:

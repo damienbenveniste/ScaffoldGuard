@@ -45,6 +45,9 @@ Common options:
 | Option | Use |
 |---|---|
 | `--profile minimal|python|typescript|monorepo` | Choose guardrails only, Python, TypeScript, or mixed workspaces |
+| `--monorepo-layout application|library|custom` | Choose a monorepo directory layout; defaults to `application` |
+| `--python-workspace PATH` | Set the Python workspace for a `custom` monorepo |
+| `--typescript-workspace PATH` | Set the TypeScript workspace for a `custom` monorepo |
 | `--agent codex|claude|cursor|all` | Choose generated agent adapter files |
 | `--ci github|gitlab` | Choose GitHub Actions or GitLab CI |
 | `--guided` | Prompt for options even when `NAME` is provided |
@@ -54,6 +57,27 @@ Common options:
 Python and monorepo profiles also accept Ruff and Python type-checking options.
 TypeScript and monorepo profiles also accept TypeScript compiler, formatter,
 linter, and test-runner options.
+
+For the `monorepo` profile, guided setup prompts for one of these layouts:
+
+| Layout | Python workspace | TypeScript workspace |
+|---|---|---|
+| `application` (default) | `apps/api` | `apps/web` |
+| `library` | `packages/core` | `packages/client` |
+| `custom` | `--python-workspace` value | `--typescript-workspace` value |
+
+Passing `NAME` and flags remains the non-interactive path. A custom layout
+requires both workspace options. They must be safe, non-overlapping relative
+directories. Each path segment must start with an ASCII letter or digit and may
+contain only letters, digits, `.`, `_`, or `-`; absolute paths, `.` and `..`
+segments, backslashes, and reserved ScaffoldGuard control roots are rejected.
+
+```bash
+scaffold-guard init app_demo --profile monorepo
+scaffold-guard init sdk_demo --profile monorepo --monorepo-layout library
+scaffold-guard init custom_demo --profile monorepo --monorepo-layout custom \
+  --python-workspace services/api --typescript-workspace clients/web
+```
 
 ## `check`
 
@@ -199,6 +223,11 @@ run `git add -f .scaffold-guard/manifest.json`, so the manifest is tracked.
 Legacy TypeScript-only projects generated before the Python tool-carrier may
 also need `.venv/` added manually before running `uv sync`, because `.gitignore`
 is seed-owned and upgrade does not rewrite it.
+
+Existing v0.2 monorepos without `[monorepo]` metadata are upgraded as the
+internal `legacy` layout. ScaffoldGuard records their existing
+`packages/python` and `packages/typescript` paths in `scaffold-guard.toml`; it
+does not rename, move, or delete their user-owned seed directories.
 
 `upgrade` does not delete or prune files. The `orphan` action reports a formerly
 managed file that remains in place for manual review.

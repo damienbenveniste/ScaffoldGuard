@@ -16,14 +16,18 @@ from scaffold_guard.checks.config import (
     table_value,
 )
 from scaffold_guard.models import (
+    PERSISTED_MONOREPO_LAYOUTS,
     SUPPORTED_PROFILES,
     AdapterSelection,
     AgentChoice,
     CiChoice,
     InitOptions,
+    MonorepoLayout,
     ProfileChoice,
     PythonQualityMode,
     PythonTypechecker,
+    WorkspacePath,
+    monorepo_workspaces,
     normalize_profile_choice,
     profile_includes_python,
     profile_includes_typescript,
@@ -63,6 +67,9 @@ class GeneratedProjectConfig:
     typescript_strict: bool
     biome: bool
     vitest: bool
+    monorepo_layout: MonorepoLayout | None
+    python_workspace: WorkspacePath | None
+    typescript_workspace: WorkspacePath | None
     format_version: int | None = None
     generated_with: str | None = None
     requires_scaffold_guard: str | None = None
@@ -125,6 +132,9 @@ class GeneratedProjectConfig:
             biome_enabled=self.biome,
             vitest_enabled=self.vitest,
             adapter_selection=self.adapters,
+            monorepo_layout=self.monorepo_layout,
+            python_workspace=self.python_workspace,
+            typescript_workspace=self.typescript_workspace,
         )
 
     def to_json(self) -> dict[str, object]:
@@ -146,7 +156,7 @@ class GeneratedProjectConfig:
                     "vitest": self.vitest,
                 }
             )
-        return {
+        payload: dict[str, object] = {
             "scaffold_guard": {
                 "format_version": self.format_version,
                 "generated_with": self.generated_with,
@@ -170,6 +180,15 @@ class GeneratedProjectConfig:
             },
             "tools": tools,
         }
+        if self.monorepo_layout is not None:
+            if self.python_workspace is None or self.typescript_workspace is None:
+                raise ProjectConfigError("Monorepo config is missing workspace paths.")
+            payload["monorepo"] = {
+                "layout": self.monorepo_layout,
+                "python_workspace": self.python_workspace.as_posix(),
+                "typescript_workspace": self.typescript_workspace.as_posix(),
+            }
+        return payload
 
 
 def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
@@ -185,6 +204,13 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     agents = table_value(config, "agents")
     features = table_value(config, "features")
     tools = table_value(config, "tools")
+    monorepo_present = "monorepo" in config
+    raw_monorepo = config.get("monorepo")
+    if monorepo_present and not isinstance(raw_monorepo, Mapping):
+        raise ProjectConfigError("[monorepo] must be a table.")
+    monorepo: Mapping[str, object] = (
+        cast("Mapping[str, object]", raw_monorepo) if monorepo_present else {}
+    )
     scaffold_guard_present = "scaffold_guard" in config
     raw_scaffold_guard = config.get("scaffold_guard")
     if scaffold_guard_present and not isinstance(raw_scaffold_guard, Mapping):
@@ -198,6 +224,11 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
     name = _required_str(project, "name")
     package = _required_str(project, "package")
     profile = _required_profile(project, "profile")
+    monorepo_layout, python_workspace, typescript_workspace = _monorepo_config(
+        profile,
+        monorepo,
+        present=monorepo_present,
+    )
     python_tool_default = profile_includes_python(profile)
     typescript_tool_default = profile_includes_typescript(profile)
     ruff_mode = _optional_quality_mode(tools, "ruff_mode")
@@ -249,10 +280,50 @@ def load_generated_project_config(root: Path) -> GeneratedProjectConfig:
         ),
         biome=_optional_bool(tools, "biome", default=typescript_tool_default),
         vitest=_optional_bool(tools, "vitest", default=typescript_tool_default),
+        monorepo_layout=monorepo_layout,
+        python_workspace=python_workspace,
+        typescript_workspace=typescript_workspace,
         format_version=format_version,
         generated_with=generated_with,
         requires_scaffold_guard=requires_scaffold_guard,
     )
+
+
+def _monorepo_config(
+    profile: ProfileChoice,
+    table: Mapping[str, object],
+    *,
+    present: bool,
+) -> tuple[MonorepoLayout | None, WorkspacePath | None, WorkspacePath | None]:
+    """Parse exact monorepo workspace state, including legacy table absence."""
+    if profile != "monorepo":
+        if present:
+            raise ProjectConfigError("[monorepo] is only valid for the monorepo profile.")
+        return None, None, None
+    if not present:
+        legacy = monorepo_workspaces("legacy")
+        return legacy.layout, legacy.python, legacy.typescript
+    layout_value = _required_str(table, "layout")
+    if layout_value not in PERSISTED_MONOREPO_LAYOUTS:
+        raise ProjectConfigError(f"Unsupported generated monorepo layout: {layout_value}")
+    layout = layout_value
+    try:
+        python_workspace = WorkspacePath.parse(
+            _required_str(table, "python_workspace"),
+            field_name="python_workspace",
+        )
+        typescript_workspace = WorkspacePath.parse(
+            _required_str(table, "typescript_workspace"),
+            field_name="typescript_workspace",
+        )
+        workspaces = monorepo_workspaces(
+            layout,
+            python_workspace=python_workspace,
+            typescript_workspace=typescript_workspace,
+        )
+    except ValueError as exc:
+        raise ProjectConfigError(str(exc)) from exc
+    return workspaces.layout, workspaces.python, workspaces.typescript
 
 
 def _project_format_metadata(

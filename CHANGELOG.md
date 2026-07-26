@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 - 2026-07-26
+
+- Added semantic `application`, `library`, and `custom` monorepo workspace
+  layouts instead of exposing language-named directories by default.
+- Preserved the legacy `packages/python` and `packages/typescript` paths when
+  upgrading existing generated monorepos, without moving user-owned seed files.
+- Made generated validation, CI, agent rules, diagnostics, and diff guidance
+  honor the configured Python and TypeScript workspace paths.
+
 ## 0.2.0 - 2026-07-09
 
 - Added versioned generated-project metadata and deterministic managed-file

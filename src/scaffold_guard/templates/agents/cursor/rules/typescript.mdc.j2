@@ -1,6 +1,6 @@
 ---
 description: "TypeScript workflow rules."
-globs: "src/**/*.ts, tests/**/*.ts, packages/typescript/**/*.ts"
+globs: "src/**/*.ts, tests/**/*.ts{% if profile == "monorepo" %}, {{ typescript_workspace }}/**/*.ts{% endif %}"
 alwaysApply: false
 ---
 
@@ -11,7 +11,11 @@ alwaysApply: false
 - Use `npm run` scripts for TypeScript commands.
 - Follow the compiler mode configured in `tsconfig.json`.
 - Do not add `any`, `// @ts-ignore`, broad casts, or broad suppressions.
-- Keep source in `src/` for TypeScript-only projects and `packages/typescript/src/` for monorepos.
+{% if profile == "monorepo" %}
+- Keep source in `{{ typescript_workspace }}/src/`.
+{% else %}
+- Keep source in `src/`.
+{% endif %}
 - Keep TypeScript validation green before claiming completion.
 {% if use_biome %}
 - Keep Biome formatting and linting green when TypeScript files change.

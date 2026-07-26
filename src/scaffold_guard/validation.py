@@ -84,7 +84,13 @@ def validation_commands(
     if config.profile == "typescript":
         return _typescript_validation_commands(config, quick=quick)
     if config.profile == "monorepo":
-        return _monorepo_validation_commands(config, quick=quick)
+        if config.python_workspace is None or config.typescript_workspace is None:
+            raise ValidationError("Monorepo validation requires both workspace paths.")
+        return _monorepo_validation_commands(
+            config,
+            python_workspace=config.python_workspace.path,
+            quick=quick,
+        )
     commands: list[tuple[str, ...]] = []
     if config.ruff:
         commands.extend(
@@ -138,20 +144,29 @@ def _typescript_validation_commands(
 
 
 def _monorepo_validation_commands(
-    config: GeneratedProjectConfig, *, quick: bool
+    config: GeneratedProjectConfig,
+    *,
+    python_workspace: Path,
+    quick: bool,
 ) -> tuple[tuple[str, ...], ...]:
     """Return validation commands for a Python + TypeScript generated monorepo."""
+    python_path = python_workspace.as_posix()
     commands: list[tuple[str, ...]] = []
     if config.ruff:
         commands.extend(
             (
-                ("uv", "run", "ruff", "format", "--check", "packages/python"),
-                ("uv", "run", "ruff", "check", "packages/python"),
+                ("uv", "run", "ruff", "format", "--check", python_path),
+                ("uv", "run", "ruff", "check", python_path),
             )
         )
     if quick:
-        commands.append(("uv", "run", "pytest", "packages/python/tests/unit"))
-        commands.extend(_monorepo_typescript_commands(config, quick=True))
+        commands.append(("uv", "run", "pytest", (python_workspace / "tests/unit").as_posix()))
+        commands.extend(
+            _monorepo_typescript_commands(
+                config,
+                quick=True,
+            )
+        )
         commands.append(("scaffold-guard", "check"))
         return tuple(commands)
     if config.mypy:
@@ -160,9 +175,9 @@ def _monorepo_validation_commands(
                 "uv",
                 "run",
                 "mypy",
-                "packages/python/src",
-                "packages/python/tests",
-                "packages/python/examples",
+                (python_workspace / "src").as_posix(),
+                (python_workspace / "tests").as_posix(),
+                (python_workspace / "examples").as_posix(),
             )
         )
     if config.pyright:
@@ -173,12 +188,15 @@ def _monorepo_validation_commands(
                 "uv",
                 "run",
                 "pytest",
-                "packages/python/tests",
+                (python_workspace / "tests").as_posix(),
                 f"--cov={config.package}",
                 "--cov-report=term-missing",
                 f"--cov-fail-under={config.coverage_fail_under}",
             ),
-            *_monorepo_typescript_commands(config, quick=False),
+            *_monorepo_typescript_commands(
+                config,
+                quick=False,
+            ),
             ("scaffold-guard", "check"),
         )
     )
@@ -186,7 +204,9 @@ def _monorepo_validation_commands(
 
 
 def _monorepo_typescript_commands(
-    config: GeneratedProjectConfig, *, quick: bool
+    config: GeneratedProjectConfig,
+    *,
+    quick: bool,
 ) -> tuple[tuple[str, ...], ...]:
     """Return TypeScript validation commands for a generated monorepo."""
     commands: list[tuple[str, ...]] = []

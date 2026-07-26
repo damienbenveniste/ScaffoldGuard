@@ -486,7 +486,7 @@ def test_compile_rules_requires_version_upgrade_before_newer_templates(
     config_path = project_dir / "scaffold-guard.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8").replace(
-            'generated_with = "0.2.0"',
+            'generated_with = "0.3.0"',
             'generated_with = "0.1.5"',
         ),
         encoding="utf-8",

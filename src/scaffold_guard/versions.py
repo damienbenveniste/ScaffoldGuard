@@ -6,10 +6,12 @@ from packaging.version import Version
 
 PUBLISH_CAPABLE_MINIMUM_VERSION: Final[str] = "0.1.3"
 MANAGED_PROJECT_MINIMUM_VERSION: Final[str] = "0.2.0"
+MONOREPO_LAYOUT_MINIMUM_VERSION: Final[str] = "0.3.0"
 GENERATED_PROJECT_MINIMUM_VERSION: Final[str] = str(
     max(
         Version(PUBLISH_CAPABLE_MINIMUM_VERSION),
         Version(MANAGED_PROJECT_MINIMUM_VERSION),
+        Version(MONOREPO_LAYOUT_MINIMUM_VERSION),
     )
 )
 PROJECT_FORMAT_VERSION: Final[int] = 1

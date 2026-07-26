@@ -30,7 +30,7 @@ Profile choices:
 | `minimal` | Guardrails only; no Python or TypeScript source scaffold |
 | `python` | Python package scaffold with `src/`, tests, docs, and `uv` |
 | `typescript` | TypeScript package scaffold with npm and configurable TypeScript tooling |
-| `monorepo` | Python + TypeScript workspaces under `packages/` |
+| `monorepo` | Python + TypeScript workspaces using an application, library, or custom layout |
 
 Generated projects include CI and local development defaults, but the
 user-facing CLI remains the installed `scaffold-guard` command.
@@ -89,7 +89,9 @@ scaffold-guard validate --quick
 ```
 
 Use the `monorepo` profile when Python and TypeScript should live in one
-repository. Guided setup asks for both Python and TypeScript tool choices:
+repository. Guided setup asks for the workspace layout and both Python and
+TypeScript tool choices. The default `application` layout generates `apps/api`
+and `apps/web`:
 
 ```bash
 scaffold-guard init app_demo --profile monorepo
@@ -97,6 +99,21 @@ cd app_demo
 uv sync --all-groups
 npm install
 scaffold-guard validate --quick
+```
+
+The `library` layout generates `packages/core` and `packages/client`. Select it
+non-interactively with:
+
+```bash
+scaffold-guard init sdk_demo --profile monorepo --monorepo-layout library
+```
+
+The `custom` layout requires both workspace flags. Each value must be a safe
+relative directory, and the two paths must not overlap:
+
+```bash
+scaffold-guard init custom_demo --profile monorepo --monorepo-layout custom \
+  --python-workspace services/api --typescript-workspace clients/web
 ```
 
 ## Preview Or Refresh Files

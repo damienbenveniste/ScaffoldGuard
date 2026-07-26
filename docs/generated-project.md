@@ -100,7 +100,7 @@ my_project/
 ```
 
 The `monorepo` profile creates one repository with Python and TypeScript
-workspaces:
+workspaces. New projects default to the `application` layout:
 
 ```text
 my_project/
@@ -114,12 +114,16 @@ my_project/
   pyrightconfig.json  # when Pyright is enabled
   scaffold-guard.toml
   .github/workflows/ci.yml  # or .gitlab-ci.yml
-  packages/python/src/my_project/
-  packages/python/tests/
-  packages/python/examples/
-  packages/typescript/src/
-  packages/typescript/tests/  # when Vitest is enabled
+  apps/api/src/my_project/
+  apps/api/tests/
+  apps/api/examples/
+  apps/web/src/
+  apps/web/tests/  # when Vitest is enabled
 ```
+
+The `library` layout uses `packages/core` for Python and `packages/client` for
+TypeScript. The `custom` layout uses the exact safe relative directories
+provided by `--python-workspace` and `--typescript-workspace`.
 
 ## Configuration
 
@@ -131,8 +135,23 @@ my_project/
 - docs and CI provider feature flags;
 - Python and test coverage settings;
 - fixed quick and full validation command descriptions;
+- for monorepos, a `[monorepo]` table with `layout`, `python_workspace`, and
+  `typescript_workspace`;
 - reserved `[scaffold_guard]` metadata containing exactly `format_version`,
   `generated_with`, and `requires_scaffold_guard`.
+
+For example, a new default monorepo records:
+
+```toml
+[monorepo]
+layout = "application"
+python_workspace = "apps/api"
+typescript_workspace = "apps/web"
+```
+
+`application`, `library`, and `custom` are user-selectable init layouts.
+`legacy` is internal persisted metadata used to preserve historical monorepo
+paths during upgrade; it is not an init choice.
 
 `.scaffold-guard/manifest.json` records generated-project ownership metadata.
 It contains project metadata plus managed-file records only. Project metadata
@@ -191,6 +210,12 @@ run `git add -f .scaffold-guard/manifest.json`, so the manifest is tracked.
 Legacy TypeScript-only projects generated before the Python tool-carrier may
 also need `.venv/` added manually before running `uv sync`, because `.gitignore`
 is seed-owned and upgrade does not rewrite it.
+
+Existing v0.2 monorepos are treated as the internal `legacy` layout when they
+do not yet have `[monorepo]` metadata. Upgrade records
+`python_workspace = "packages/python"` and
+`typescript_workspace = "packages/typescript"` without renaming, moving, or
+deleting those user-owned seed directories.
 
 Upgrades report orphans without deleting or pruning them. Review those files
 manually after the upgrade, then run `scaffold-guard check` and

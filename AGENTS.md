@@ -19,6 +19,11 @@ configuration change in this repository.
   guardrails only; `python` should be explicit when users want Python package
   folders and tooling; `typescript` and `monorepo` should be explicit when
   users want TypeScript or mixed Python+TypeScript starter layouts.
+- New monorepo projects should use semantic workspace layouts: `application`
+  generates `apps/api` and `apps/web`, `library` generates `packages/core` and
+  `packages/client`, and `custom` requires two explicit safe relative paths.
+  Preserve recorded workspace paths when upgrading existing projects; never
+  rename or move user-owned seed directories automatically.
 - Keep `scaffold-guard init` friendly for first-time users: omitting `NAME`
   starts guided setup, and leaving the project-name prompt blank initializes
   the current empty directory. Passing `NAME` and flags remains the stable
@@ -171,9 +176,9 @@ configuration change in this repository.
   set everywhere instead of assuming they are always enabled.
 - Generated TypeScript-only projects should not include Python package tooling
   or Python-specific adapter rules.
-- Generated monorepos should keep Python code under `packages/python/` and
-  TypeScript code under `packages/typescript/`, with validation scoped to the
-  relevant workspace when possible.
+- Generated monorepos should keep Python and TypeScript code under the exact
+  workspace paths recorded in `scaffold-guard.toml`, with validation scoped to
+  the relevant workspace.
 - Do not introduce `any`, `as any`, `// @ts-ignore`, `// @ts-expect-error`, or
   broad lint suppressions in generated TypeScript examples or templates.
 

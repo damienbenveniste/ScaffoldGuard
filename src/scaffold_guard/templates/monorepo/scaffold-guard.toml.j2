@@ -24,6 +24,11 @@ mkdocs = false
 python = true
 typescript = true
 
+[monorepo]
+layout = "{{ monorepo_layout }}"
+python_workspace = "{{ python_workspace }}"
+typescript_workspace = "{{ typescript_workspace }}"
+
 [tools]
 ruff = {{ ruff_enabled }}
 ruff_mode = "{{ ruff_mode }}"
@@ -50,10 +55,10 @@ require_lockfile_for_dependency_changes = true
 [validation]
 quick = [
 {% if use_ruff %}
-  "uv run ruff format --check packages/python",
-  "uv run ruff check packages/python",
+  "uv run ruff format --check {{ python_workspace }}",
+  "uv run ruff check {{ python_workspace }}",
 {% endif %}
-  "uv run pytest packages/python/tests/unit",
+  "uv run pytest {{ python_workspace }}/tests/unit",
 {% if use_biome %}
   "npm run ts:format:check",
   "npm run ts:lint",
@@ -66,16 +71,16 @@ quick = [
 ]
 full = [
 {% if use_ruff %}
-  "uv run ruff format --check packages/python",
-  "uv run ruff check packages/python",
+  "uv run ruff format --check {{ python_workspace }}",
+  "uv run ruff check {{ python_workspace }}",
 {% endif %}
 {% if use_mypy %}
-  "uv run mypy packages/python/src packages/python/tests packages/python/examples",
+  "uv run mypy {{ python_workspace }}/src {{ python_workspace }}/tests {{ python_workspace }}/examples",
 {% endif %}
 {% if use_pyright %}
   "uv run pyright",
 {% endif %}
-  "uv run pytest packages/python/tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}",
+  "uv run pytest {{ python_workspace }}/tests --cov={{ package_name }} --cov-report=term-missing --cov-fail-under={{ coverage }}",
 {% if use_biome %}
   "npm run ts:format:check",
   "npm run ts:lint",

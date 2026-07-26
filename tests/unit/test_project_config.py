@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from scaffold_guard import __version__
 from scaffold_guard.models import AdapterSelection, AgentChoice
 from scaffold_guard.project_config import (
     ProjectConfigError,
     load_generated_project_config,
 )
-from scaffold_guard.versions import PROJECT_FORMAT_VERSION
+from scaffold_guard.versions import GENERATED_PROJECT_MINIMUM_VERSION, PROJECT_FORMAT_VERSION
 
 
 @pytest.mark.parametrize(
@@ -50,8 +51,8 @@ def test_generated_project_config_round_trips_agent_selection(
     assert config.adapters == tuple(name for name, enabled in expected_flags.items() if enabled)
     assert options.adapter_selection == config.adapters
     assert config.format_version == PROJECT_FORMAT_VERSION
-    assert config.generated_with == "0.2.0"
-    assert config.requires_scaffold_guard == ">=0.2.0"
+    assert config.generated_with == __version__
+    assert config.requires_scaffold_guard == f">={GENERATED_PROJECT_MINIMUM_VERSION}"
     assert payload["features"] == {
         "docs": True,
         "github_actions": True,
@@ -350,7 +351,7 @@ def test_generated_project_config_rejects_incompatible_runtime_metadata(
     config_path = project_dir / "scaffold-guard.toml"
     replace_text(
         config_path,
-        'requires_scaffold_guard = ">=0.2.0"',
+        f'requires_scaffold_guard = ">={GENERATED_PROJECT_MINIMUM_VERSION}"',
         'requires_scaffold_guard = ">=99"',
     )
 
@@ -470,6 +471,81 @@ def test_generated_project_config_loads_monorepo_profile(
     assert options.typescript_strict_enabled
     assert options.biome_enabled
     assert options.vitest_enabled
+    assert config.monorepo_layout == "application"
+    assert config.python_workspace is not None
+    assert config.python_workspace.as_posix() == "apps/api"
+    assert config.typescript_workspace is not None
+    assert config.typescript_workspace.as_posix() == "apps/web"
+    assert options.monorepo_layout == "application"
+    assert config.to_json()["monorepo"] == {
+        "layout": "application",
+        "python_workspace": "apps/api",
+        "typescript_workspace": "apps/web",
+    }
+
+
+def test_generated_project_config_loads_legacy_monorepo_without_table(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Existing monorepos without workspace metadata retain historical paths."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+    config_path = project_dir / "scaffold-guard.toml"
+    content = config_path.read_text(encoding="utf-8")
+    config_path.write_text(content.split("\n[monorepo]\n", maxsplit=1)[0] + "\n", encoding="utf-8")
+
+    config = load_generated_project_config(project_dir)
+
+    assert config.monorepo_layout == "legacy"
+    assert config.python_workspace is not None
+    assert config.python_workspace.as_posix() == "packages/python"
+    assert config.typescript_workspace is not None
+    assert config.typescript_workspace.as_posix() == "packages/typescript"
+
+
+def test_generated_project_config_accepts_persisted_legacy_monorepo_layout(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Upgrade migrations may persist the internal legacy layout explicitly."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+    config_path = project_dir / "scaffold-guard.toml"
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace('layout = "application"', 'layout = "legacy"')
+    content = content.replace(
+        'python_workspace = "apps/api"', 'python_workspace = "packages/python"'
+    )
+    content = content.replace(
+        'typescript_workspace = "apps/web"',
+        'typescript_workspace = "packages/typescript"',
+    )
+    config_path.write_text(content, encoding="utf-8")
+
+    config = load_generated_project_config(project_dir)
+    options = config.to_init_options(dry_run=True, force=False)
+
+    assert config.monorepo_layout == "legacy"
+    assert options.monorepo_layout == "legacy"
+
+
+def test_generated_project_config_rejects_invalid_monorepo_workspace_metadata(
+    tmp_path: Path,
+    generated_project: Callable[..., Path],
+) -> None:
+    """Persisted workspace paths must be safe, disjoint, and layout-consistent."""
+    project_dir = generated_project(tmp_path, profile="monorepo")
+    config_path = project_dir / "scaffold-guard.toml"
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace('layout = "application"', 'layout = "custom"')
+    content = content.replace('python_workspace = "apps/api"', 'python_workspace = "workspaces"')
+    content = content.replace(
+        'typescript_workspace = "apps/web"',
+        'typescript_workspace = "workspaces/web"',
+    )
+    config_path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(ProjectConfigError, match="must not overlap"):
+        load_generated_project_config(project_dir)
 
 
 def test_generated_project_config_round_trips_typescript_tool_selection(
