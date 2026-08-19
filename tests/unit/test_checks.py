@@ -1,6 +1,7 @@
 """Unit tests for generated-project checkers."""
 
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import replace
@@ -9,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from scaffold_guard.adapters.base import adapters_for
+from scaffold_guard.checks import files as check_files
 from scaffold_guard.checks.base import CheckConfigurationError, CheckResult, finding
 from scaffold_guard.checks.config import (
     ci_enabled,
@@ -542,6 +544,328 @@ def test_unsafe_patterns_detects_env_file(tmp_path: Path) -> None:
 
     assert not result.ok
     assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+def test_unsafe_patterns_allows_ignored_untracked_env_without_reading_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ignored, untracked `.env` is safe regardless of its file contents."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _init_git_repository(project_dir)
+    (project_dir / ".gitignore").write_text(".env\n", encoding="utf-8")
+    env_path = project_dir / ".env"
+    env_path.write_bytes(b"\xff\xfe\x00secret")
+    read_text = Path.read_text
+
+    def reject_env_read(
+        path: Path,
+        encoding: str | None = None,
+        errors: str | None = None,
+    ) -> str:
+        if path == env_path:
+            msg = "The checker must not read .env."
+            raise AssertionError(msg)
+        return read_text(path, encoding=encoding, errors=errors)
+
+    monkeypatch.setattr(Path, "read_text", reject_env_read)
+
+    result = check_unsafe_patterns(project_dir)
+
+    assert result.ok
+
+
+def test_unsafe_patterns_rejects_ignored_tracked_env(tmp_path: Path) -> None:
+    """Ignore rules cannot make an already tracked `.env` safe."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _init_git_repository(project_dir)
+    (project_dir / ".gitignore").write_text(".env\n", encoding="utf-8")
+    (project_dir / ".env").write_bytes(b"\xff\xfe\x00secret")
+    _run_git(project_dir, "add", "--force", ".env")
+
+    result = check_unsafe_patterns(project_dir)
+
+    assert not result.ok
+    assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+def test_unsafe_patterns_rejects_untracked_unignored_env(tmp_path: Path) -> None:
+    """An untracked `.env` must be covered by an effective ignore rule."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _init_git_repository(project_dir)
+    (project_dir / ".env").write_bytes(b"\xff\xfe\x00secret")
+
+    result = check_unsafe_patterns(project_dir)
+
+    assert not result.ok
+    assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+def test_unsafe_patterns_rejects_tracked_unignored_env(tmp_path: Path) -> None:
+    """A tracked `.env` is unsafe even without a matching ignore rule."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _init_git_repository(project_dir)
+    (project_dir / ".env").write_bytes(b"\xff\xfe\x00secret")
+    _run_git(project_dir, "add", ".env")
+
+    result = check_unsafe_patterns(project_dir)
+
+    assert not result.ok
+    assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+def test_unsafe_patterns_fails_closed_when_git_path_state_command_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A repository with unavailable Git state must not trust `.gitignore` alone."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _init_git_repository(project_dir)
+    (project_dir / ".gitignore").write_text(".env\n", encoding="utf-8")
+    (project_dir / ".env").write_bytes(b"\xff\xfe\x00secret")
+
+    def fail_git_command(
+        *args: object,
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del args
+        del kwargs
+        raise OSError
+
+    monkeypatch.setattr("scaffold_guard.checks.files.subprocess.run", fail_git_command)
+
+    result = check_unsafe_patterns(project_dir)
+
+    assert not result.ok
+    assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+def test_unsafe_patterns_allows_explicitly_ignored_env_without_git_repository(
+    tmp_path: Path,
+) -> None:
+    """A non-repository project can rely on an explicit root `.env` ignore."""
+    (tmp_path / ".gitignore").write_text(".env\n", encoding="utf-8")
+    (tmp_path / ".env").write_bytes(b"\xff\xfe\x00secret")
+
+    result = check_unsafe_patterns(tmp_path)
+
+    assert result.ok
+
+
+def test_unsafe_patterns_rejects_env_without_git_repository_or_ignore(
+    tmp_path: Path,
+) -> None:
+    """A non-repository `.env` remains unsafe when no ignore rule protects it."""
+    (tmp_path / ".env").write_bytes(b"\xff\xfe\x00secret")
+
+    result = check_unsafe_patterns(tmp_path)
+
+    assert not result.ok
+    assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+@pytest.mark.parametrize("gitignore", [".env\n!.env\n", ".env/\n"])
+def test_unsafe_patterns_rejects_ineffective_explicit_env_ignore_without_git(
+    tmp_path: Path,
+    gitignore: str,
+) -> None:
+    """Negated and directory-only rules do not protect a root `.env` file."""
+    (tmp_path / ".gitignore").write_text(gitignore, encoding="utf-8")
+    (tmp_path / ".env").write_bytes(b"\xff\xfe\x00secret")
+
+    result = check_unsafe_patterns(tmp_path)
+
+    assert not result.ok
+    assert any(finding.code == "no-env-file" for finding in result.findings)
+
+
+@pytest.mark.parametrize("relative_path", [Path("../.env"), Path("nested/../../.env")])
+def test_git_path_state_rejects_parent_traversal(
+    tmp_path: Path,
+    relative_path: Path,
+) -> None:
+    """Git state queries reject paths that can escape the requested root."""
+    with pytest.raises(ValueError, match="relative"):
+        check_files.git_path_state(tmp_path, relative_path)
+
+
+def test_git_path_state_rejects_absolute_path(tmp_path: Path) -> None:
+    """Git state queries accept only project-relative paths."""
+    with pytest.raises(ValueError, match="relative"):
+        check_files.git_path_state(tmp_path, tmp_path / ".env")
+
+
+def test_git_path_state_uses_explicit_ignore_when_git_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-repository fallback remains reliable when Git is unavailable."""
+    (tmp_path / ".gitignore").write_text("/.env\n", encoding="utf-8")
+
+    def git_missing(_executable: str) -> None:
+        pass
+
+    monkeypatch.setattr("scaffold_guard.checks.files.shutil.which", git_missing)
+
+    state = check_files.git_path_state(tmp_path, Path(".env"))
+
+    assert state == check_files.GitPathState(tracked=False, ignored=True, reliable=True)
+
+
+@pytest.mark.parametrize(
+    ("worktree_output", "reliable", "ignored"),
+    [("false\n", True, True), ("unexpected\n", False, False)],
+)
+def test_git_path_state_handles_non_worktree_and_unexpected_rev_parse_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worktree_output: str,
+    reliable: bool,
+    ignored: bool,
+) -> None:
+    """Git's explicit non-worktree and malformed states remain distinguishable."""
+    (tmp_path / ".gitignore").write_text(".env\n", encoding="utf-8")
+    result = subprocess.CompletedProcess(
+        args=("git",),
+        returncode=0,
+        stdout=worktree_output,
+        stderr="",
+    )
+
+    def return_result(
+        _git_path: str,
+        _root: Path,
+        _arguments: tuple[str, ...],
+    ) -> subprocess.CompletedProcess[str]:
+        return result
+
+    monkeypatch.setattr(check_files, "_run_git", return_result)
+
+    state = check_files.git_path_state(tmp_path, Path(".env"))
+
+    assert state == check_files.GitPathState(
+        tracked=False,
+        ignored=ignored,
+        reliable=reliable,
+    )
+
+
+@pytest.mark.parametrize("failed_result", [None, 2])
+def test_git_path_state_rejects_unreliable_repository_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failed_result: int | None,
+) -> None:
+    """Missing or unexpected path-query results make repository state unreliable."""
+    (tmp_path / ".git").mkdir()
+    worktree = subprocess.CompletedProcess(args=("git",), returncode=0, stdout="true\n", stderr="")
+    failure = (
+        None
+        if failed_result is None
+        else subprocess.CompletedProcess(
+            args=("git",), returncode=failed_result, stdout="", stderr="failed"
+        )
+    )
+    responses = iter((worktree, failure, failure))
+
+    def return_next_result(
+        _git_path: str,
+        _root: Path,
+        _arguments: tuple[str, ...],
+    ) -> subprocess.CompletedProcess[str] | None:
+        return next(responses)
+
+    monkeypatch.setattr(check_files, "_run_git", return_next_result)
+
+    state = check_files.git_path_state(tmp_path, Path(".env"))
+
+    assert state == check_files.GitPathState(tracked=False, ignored=False, reliable=False)
+
+
+def test_git_path_state_fails_closed_when_worktree_detection_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Git worktree marker prevents fallback after rev-parse errors."""
+    (tmp_path / ".git").write_text("gitdir: elsewhere\n", encoding="utf-8")
+    failure = subprocess.CompletedProcess(args=("git",), returncode=128, stdout="", stderr="failed")
+
+    def return_failure(
+        _git_path: str,
+        _root: Path,
+        _arguments: tuple[str, ...],
+    ) -> subprocess.CompletedProcess[str]:
+        return failure
+
+    monkeypatch.setattr(check_files, "_run_git", return_failure)
+
+    state = check_files.git_path_state(tmp_path, Path(".env"))
+
+    assert state == check_files.GitPathState(tracked=False, ignored=False, reliable=False)
+
+
+def test_git_path_state_separates_options_from_repository_relative_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tracked and ignored queries place `--` before the path argument."""
+    calls: list[tuple[str, ...]] = []
+
+    def record_git_query(
+        _git_path: str,
+        _root: Path,
+        arguments: tuple[str, ...],
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(arguments)
+        return subprocess.CompletedProcess(
+            args=("git",),
+            returncode=0 if arguments[0] == "rev-parse" else 1,
+            stdout="true\n" if arguments[0] == "rev-parse" else "",
+            stderr="",
+        )
+
+    monkeypatch.setattr(check_files, "_run_git", record_git_query)
+
+    state = check_files.git_path_state(tmp_path, Path(".env"))
+
+    assert state.reliable
+    assert calls == [
+        ("rev-parse", "--is-inside-work-tree"),
+        ("ls-files", "--error-unmatch", "--", ".env"),
+        ("check-ignore", "--no-index", "--quiet", "--", ".env"),
+    ]
+
+
+def test_unsafe_patterns_allows_ignored_env_in_git_worktree(tmp_path: Path) -> None:
+    """Linked Git worktrees receive the same ignored-untracked handling."""
+    repository = tmp_path / "repository"
+    worktree = tmp_path / "worktree"
+    repository.mkdir()
+    _init_git_repository(repository)
+    (repository / ".gitignore").write_text(".env\n", encoding="utf-8")
+    _run_git(repository, "add", ".gitignore")
+    _run_git(
+        repository,
+        "-c",
+        "user.name=ScaffoldGuard Tests",
+        "-c",
+        "user.email=scaffold-guard@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "initial",
+    )
+    _run_git(repository, "worktree", "add", "--quiet", "-b", "test-worktree", str(worktree))
+    (worktree / ".env").write_bytes(b"\xff\xfe\x00secret")
+
+    result = check_unsafe_patterns(worktree)
+
+    assert result.ok
 
 
 def test_unsafe_patterns_allows_ignored_venv_directory(tmp_path: Path) -> None:
@@ -1363,6 +1687,25 @@ def _generated_project(
 def _replace_text(path: Path, old: str, new: str) -> None:
     """Replace text in a UTF-8 file."""
     path.write_text(path.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+
+
+def _init_git_repository(path: Path) -> None:
+    """Initialize a quiet temporary Git repository."""
+    _run_git(path, "init", "--quiet")
+
+
+def _run_git(path: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    """Run Git in a temporary test repository without invoking a shell."""
+    git_executable = shutil.which("git")
+    assert git_executable is not None
+    run = subprocess.run
+    return run(
+        (git_executable, "-C", str(path), *arguments),
+        check=True,
+        capture_output=True,
+        shell=False,
+        text=True,
+    )
 
 
 def _set_manifest_adapters(

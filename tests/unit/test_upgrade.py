@@ -8,6 +8,7 @@ from typing import Protocol, cast
 import pytest
 from typer.testing import CliRunner
 
+from scaffold_guard import __version__
 from scaffold_guard import upgrade as upgrade_module
 from scaffold_guard.checks.base import CheckReport, CheckResult, finding
 from scaffold_guard.cli import app
@@ -269,7 +270,7 @@ def test_v020_monorepo_upgrade_records_legacy_layout_without_moving_seed_files(
     )
     config_path.write_text(
         config_text.replace(legacy_table, "")
-        .replace('generated_with = "0.3.0"', 'generated_with = "0.2.0"')
+        .replace(f'generated_with = "{__version__}"', 'generated_with = "0.2.0"')
         .replace('requires_scaffold_guard = ">=0.3.0"', 'requires_scaffold_guard = ">=0.2.0"'),
         encoding="utf-8",
     )
@@ -636,7 +637,7 @@ def test_apply_rolls_back_all_upgrade_outputs_when_verification_fails(
     config_path = project_dir / "scaffold-guard.toml"
     config_text = config_path.read_text(encoding="utf-8")
     config_path.write_text(
-        config_text.replace('generated_with = "0.3.0"', 'generated_with = "0.1.5"')
+        config_text.replace(f'generated_with = "{__version__}"', 'generated_with = "0.1.5"')
         .replace('requires_scaffold_guard = ">=0.3.0"', 'requires_scaffold_guard = ">=0.1.3"')
         .replace("ruff = true", "ruff = false")
         .replace('ruff_mode = "strict"', 'ruff_mode = "off"'),

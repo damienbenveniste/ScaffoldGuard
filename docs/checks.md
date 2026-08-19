@@ -33,7 +33,9 @@ Detects common risky agent outputs, including:
   broad lint suppressions in generated TypeScript source or tests;
 - suspicious secret literals;
 - `subprocess.run(..., shell=True)`;
-- committed `.env`, `.venv`, or runtime artifact directories.
+- `.env` files that are tracked, not ignored, or whose Git state cannot be
+  determined reliably; an ignored and untracked local `.env` is allowed;
+- committed `.venv` or runtime artifact directories.
 
 ### project-health
 

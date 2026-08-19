@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2026-08-18
+
+- Allowed local `.env` files only when Git confirms they are ignored and
+  untracked, while failing closed for tracked, unignored, or unreliable states.
+- Preserved a conservative no-repository fallback that requires `.gitignore`
+  to contain an explicit `.env` entry without inspecting the file contents.
+
 ## 0.3.0 - 2026-07-26
 
 - Added semantic `application`, `library`, and `custom` monorepo workspace
