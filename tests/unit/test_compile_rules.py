@@ -9,6 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 import scaffold_guard.compile_rules as compile_rules_module
+from scaffold_guard import __version__
 from scaffold_guard.cli import app
 from scaffold_guard.compile_rules import (
     GENERATED_MARKER,
@@ -486,7 +487,7 @@ def test_compile_rules_requires_version_upgrade_before_newer_templates(
     config_path = project_dir / "scaffold-guard.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8").replace(
-            'generated_with = "0.3.0"',
+            f'generated_with = "{__version__}"',
             'generated_with = "0.1.5"',
         ),
         encoding="utf-8",

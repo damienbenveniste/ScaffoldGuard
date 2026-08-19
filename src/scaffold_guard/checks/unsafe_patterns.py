@@ -8,6 +8,7 @@ from pathlib import Path
 from scaffold_guard.checks.base import CheckFinding, CheckResult, finding
 from scaffold_guard.checks.config import policy_enabled
 from scaffold_guard.checks.files import (
+    git_path_state,
     gitignore_entries,
     iter_text_files,
     read_lines,
@@ -242,14 +243,18 @@ def _scan_runtime_artifacts(root: Path) -> Iterable[CheckFinding]:
     findings: list[CheckFinding] = []
     ignored_entries = gitignore_entries(root)
     if (root / ".env").exists():
-        findings.append(
-            finding(
-                ".env",
-                line=0,
-                code="no-env-file",
-                message="Do not commit .env files or local credentials.",
+        env_state = git_path_state(root, Path(".env"))
+        if not env_state.reliable or env_state.tracked or not env_state.ignored:
+            findings.append(
+                finding(
+                    ".env",
+                    line=0,
+                    code="no-env-file",
+                    message=(
+                        "Keep .env ignored and untracked so local credentials cannot be committed."
+                    ),
+                )
             )
-        )
     findings.extend(
         finding(
             artifact,
